@@ -1,6 +1,6 @@
 # WorkFlow Pro - Workload Management & Reporting System
 
-A comprehensive web-based system for managing MCL (Manpower, Cost & Logistics) reports, Problem reports, and team collaboration through discussion threads.
+A comprehensive web-based system for managing MCL reports, Problem reports, and team collaboration through discussion threads.
 
 ## 🚀 Quick Start
 
@@ -9,15 +9,15 @@ A comprehensive web-based system for managing MCL (Manpower, Cost & Logistics) r
 - PostgreSQL 12 or later
 - npm, yarn, or pnpm
 
-### 1. Clone and Install
+### Clone and Install
 
 \`\`\`bash
 git clone <repository-url>
-cd workload-management-system
+cd WorkFlowPro
 npm install
 \`\`\`
 
-### 2. PostgreSQL Database Setup
+### PostgreSQL Database Setup
 
 #### Install PostgreSQL (if not already installed)
 
@@ -67,10 +67,7 @@ npm run db:reset
 
 #### Configure Database Connection
 
-1. **Copy the environment file:**
-\`\`\`bash
-cp .env.local.example .env.local
-\`\`\`
+
 
 2. **Update `.env.local` with your database credentials:**
 \`\`\`env
@@ -157,7 +154,7 @@ psql -U postgres -d workload_management -c "SELECT version();"
 
 **"database does not exist" error:**
 \`\`\`bash
-createdb -U postgres workload_management
+createdb -U postgres workflowpro
 npm run db:setup
 \`\`\`
 
@@ -224,12 +221,6 @@ DB_NAME=workload_management
 DB_USER=postgres
 DB_PASSWORD=your_password
 
-# Optional
-NEXTAUTH_SECRET=your-secret-key
-NEXTAUTH_URL=http://localhost:3000
-NODE_ENV=development
-\`\`\`
-
 ## 🚀 Deployment
 
 ### Local Production Build
@@ -252,14 +243,6 @@ RUN npm run build
 EXPOSE 3000
 CMD ["npm", "start"]
 \`\`\`
-
-### Cloud Deployment
-
-The application can be deployed to:
-- **Vercel** (recommended for Next.js)
-- **Heroku** with PostgreSQL add-on
-- **AWS** with RDS PostgreSQL
-- **DigitalOcean** App Platform
 
 ## Features
 
