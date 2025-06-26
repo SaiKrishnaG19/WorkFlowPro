@@ -18,6 +18,8 @@ yarn-error.log*
 
 # env files
 .env*
+yes.pub
+yes
 
 # vercel
 .vercel
