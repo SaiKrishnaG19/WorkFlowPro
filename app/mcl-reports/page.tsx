@@ -19,16 +19,16 @@ interface User {
 
 interface MCLReport {
   id: string
-  clientName: string
-  entryAt: string
-  exitAt: string
-  visitType: string
+  client_name: string
+  entry_at: string
+  exit_at: string
+  visit_type: string
   purpose: string
   shift: string
   remark: string
   status: "Pending Approval" | "Approved" | "Rejected"
-  submittedBy: string
-  submittedAt: string
+  submitted_by: string
+  submitted_at: string
 }
 
 export default function MCLReportsPage() {
@@ -81,7 +81,7 @@ export default function MCLReportsPage() {
     if (searchTerm) {
       filtered = filtered.filter(
         (report) =>
-          report.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          report.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           report.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
           report.purpose.toLowerCase().includes(searchTerm.toLowerCase()),
       )
@@ -195,10 +195,10 @@ export default function MCLReportsPage() {
                 {filteredReports.map((report) => (
                   <TableRow key={report.id}>
                     <TableCell className="font-medium">{report.id}</TableCell>
-                    <TableCell>{report.clientName}</TableCell>
-                    <TableCell>{report.visitType}</TableCell>
-                    <TableCell>{formatDateTime(report.entryAt)}</TableCell>
-                    <TableCell>{formatDateTime(report.exitAt)}</TableCell>
+                    <TableCell>{report.client_name}</TableCell>
+                    <TableCell>{report.visit_type}</TableCell>
+                    <TableCell>{formatDateTime(report.entry_at)}</TableCell>
+                    <TableCell>{formatDateTime(report.exit_at)}</TableCell>
                     <TableCell>{getStatusBadge(report.status)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
