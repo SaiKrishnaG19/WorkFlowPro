@@ -43,8 +43,8 @@ interface LookupValue {
   sort_order: number
 }
 
-export default function EditMCLReportPage({ params }: { params: { id: string } }) {
-  const { id } = params
+export default function EditMCLReportPage({ params }: { params: Promise<{ id: string }> }) {
+  const  { id }  = use(params)
   const [user, setUser] = useState<User | null>(null)
   const [report, setReport] = useState<MCLReport | null>(null)
   const router = useRouter()
@@ -161,7 +161,7 @@ export default function EditMCLReportPage({ params }: { params: { id: string } }
     e.preventDefault()
 
     try {
-      const response = await fetch(`/api/mcl-reports/${params.id}`, {
+      const response = await fetch(`/api/mcl-reports/${(await params).id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
