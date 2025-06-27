@@ -19,17 +19,17 @@ interface User {
 
 interface ProblemReport {
   id: string
-  clientName: string
+  client_name: string
   environment: string
-  problemStatement: string
-  receivedAt: string
+  problem_statement: string
+  received_at: string
   rca: string
   solution: string
-  attendedBy: string
+  attended_by: string
   status: "Open" | "In Progress" | "Closed"
-  slaHours: number
-  submittedBy: string
-  submittedAt: string
+  sla_hours: number
+  submitted_by: string
+  submitted_at: string
 }
 
 export default function ProblemReportsPage() {
@@ -82,9 +82,9 @@ export default function ProblemReportsPage() {
     if (searchTerm) {
       filtered = filtered.filter(
         (report) =>
-          report.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          report.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           report.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          report.problemStatement.toLowerCase().includes(searchTerm.toLowerCase()),
+          report.problem_statement.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
 
@@ -309,26 +309,26 @@ export default function ProblemReportsPage() {
                   {filteredReports.map((report) => (
                     <TableRow key={report.id}>
                       <TableCell className="font-medium">{report.id}</TableCell>
-                      <TableCell>{report.clientName}</TableCell>
+                      <TableCell>{report.client_names}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{report.environment}</Badge>
                       </TableCell>
-                      <TableCell className="max-w-xs truncate">{report.problemStatement}</TableCell>
+                      <TableCell className="max-w-xs truncate">{report.problem_statement}</TableCell>
                       <TableCell>
                         <div className="flex items-center">
                           {getStatusBadge(report.status)}
-                          {getSLAStatus(report.receivedAt, report.slaHours, report.status)}
+                          {getSLAStatus(report.received_at, report.sla_hours, report.status)}
                         </div>
                       </TableCell>
-                      <TableCell>{report.slaHours}h</TableCell>
-                      <TableCell>{report.attendedBy}</TableCell>
-                      <TableCell>{formatDateTime(report.receivedAt)}</TableCell>
+                      <TableCell>{report.sla_hours}h</TableCell>
+                      <TableCell>{report.attended_by}</TableCell>
+                      <TableCell>{formatDateTime(report.received_at)}</TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button variant="outline" size="sm">
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {report.status !== "Closed" && user?.role === "User" && report.submittedBy === user?.name && (
+                          {report.status !== "Closed" && user?.role === "User" && report.submitted_by === user?.name && (
                             <Link href={`/problem-reports/edit/${report.id}`}>
                               <Button variant="outline" size="sm">
                                 <Edit className="h-4 w-4" />

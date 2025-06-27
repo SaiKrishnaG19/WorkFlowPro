@@ -72,7 +72,7 @@ async function getProblemReportById(id: string) {
             u.name as submitted_by,
             a.name as attended_by
           FROM problem_reports p
-          LEFT JOIN lookup_list_values c ON p.client_name_id = c.id AND c.list_name = 'clients'
+          LEFT JOIN lookup_list_values c ON p.client_name_id = c.id AND c.list_name = 'client_names'
           LEFT JOIN lookup_list_values e ON p.environment_id = e.id AND e.list_name = 'environments'
           LEFT JOIN users u ON p.user_id = u.emp_id
           LEFT JOIN users a ON p.attended_by_id = a.emp_id
