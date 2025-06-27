@@ -1,6 +1,6 @@
 # WorkFlow Pro - Workload Management & Reporting System
 
-A comprehensive web-based system for managing MCL (Manpower, Cost & Logistics) reports, Problem reports, and team collaboration through discussion threads.
+A comprehensive web-based system for managing MCL reports, Problem reports, and team collaboration through discussion threads.
 
 ## 🚀 Quick Start
 
@@ -9,15 +9,14 @@ A comprehensive web-based system for managing MCL (Manpower, Cost & Logistics) r
 - PostgreSQL 12 or later
 - npm, yarn, or pnpm
 
-### 1. Clone and Install
+### Clone and Install
 
-\`\`\`bash
+
 git clone <repository-url>
-cd workload-management-system
+cd WorkFlowPro
 npm install
-\`\`\`
 
-### 2. PostgreSQL Database Setup
+### PostgreSQL Database Setup
 
 #### Install PostgreSQL (if not already installed)
 
@@ -26,18 +25,12 @@ npm install
 2. Run the installer and follow the setup wizard
 3. Remember the password you set for the 'postgres' user
 
-**macOS:**
-\`\`\`bash
-# Using Homebrew
-brew install postgresql
-brew services start postgresql
-
 # Create a database user (optional)
 createuser -s postgres
-\`\`\`
+
 
 **Linux (Ubuntu/Debian):**
-\`\`\`bash
+
 sudo apt update
 sudo apt install postgresql postgresql-contrib
 sudo systemctl start postgresql
@@ -45,7 +38,6 @@ sudo systemctl enable postgresql
 
 # Switch to postgres user and create database
 sudo -u postgres psql
-\`\`\`
 
 #### Create Database and Tables
 
@@ -54,7 +46,7 @@ sudo -u postgres psql
 3. **Navigate to your project directory**
 4. **Run the database setup:**
 
-\`\`\`bash
+
 # Method 1: Using npm script (recommended)
 npm run db:setup
 
@@ -63,34 +55,30 @@ psql -U postgres -f lib/schema.sql
 
 # If you need to reset the database
 npm run db:reset
-\`\`\`
+
 
 #### Configure Database Connection
 
-1. **Copy the environment file:**
-\`\`\`bash
-cp .env.local.example .env.local
-\`\`\`
+
 
 2. **Update `.env.local` with your database credentials:**
-\`\`\`env
+env
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=workload_management
 DB_USER=postgres
 DB_PASSWORD=your_actual_password
-\`\`\`
+
 
 ### 3. Run the Application
 
-\`\`\`bash
+
 # Development mode
 npm run dev
 
 # Production build
 npm run build
 npm start
-\`\`\`
 
 ### 4. Access the Application
 
@@ -135,63 +123,63 @@ The application uses the following main tables:
 ### Database Connection Issues
 
 1. **Check PostgreSQL is running:**
-\`\`\`bash
+
 # Windows
 pg_ctl status
 
 # macOS/Linux
 sudo systemctl status postgresql
-\`\`\`
+
 
 2. **Verify database exists:**
-\`\`\`bash
+
 psql -U postgres -l
-\`\`\`
+
 
 3. **Test connection:**
-\`\`\`bash
+
 psql -U postgres -d workload_management -c "SELECT version();"
-\`\`\`
+
 
 ### Common Issues
 
 **"database does not exist" error:**
-\`\`\`bash
-createdb -U postgres workload_management
+
+createdb -U postgres workflowpro
 npm run db:setup
-\`\`\`
+
 
 **"password authentication failed" error:**
 - Update the password in `.env.local`
 - Reset PostgreSQL password if needed
 
 **Port 3000 already in use:**
-\`\`\`bash
+
 # Kill process using port 3000
 npx kill-port 3000
 
 # Or use different port
 npm run dev -- -p 3001
-\`\`\`
+
 
 ### Reset Everything
 
 If you need to start fresh:
 
-\`\`\`bash
+
 # Reset database
 npm run db:reset
 
 # Clear application data
 rm -rf .next
 npm run build
-\`\`\`
+
 
 ## 🔧 Development
 
 ### Project Structure
 
-\`\`\`
+
 app/
 ├── page.tsx                    # Login page
 ├── dashboard/                  # Main dashboard
@@ -205,7 +193,7 @@ app/
 lib/
 ├── db.ts                      # Database connection
 └── schema.sql                 # Database schema
-\`\`\`
+
 
 ### Adding New Features
 
@@ -216,7 +204,7 @@ lib/
 
 ### Environment Variables
 
-\`\`\`env
+env
 # Required
 DB_HOST=localhost
 DB_PORT=5432
@@ -224,24 +212,18 @@ DB_NAME=workload_management
 DB_USER=postgres
 DB_PASSWORD=your_password
 
-# Optional
-NEXTAUTH_SECRET=your-secret-key
-NEXTAUTH_URL=http://localhost:3000
-NODE_ENV=development
-\`\`\`
-
 ## 🚀 Deployment
 
 ### Local Production Build
 
-\`\`\`bash
+
 npm run build
 npm start
-\`\`\`
+
 
 ### Docker Deployment (Optional)
 
-\`\`\`dockerfile
+
 # Dockerfile
 FROM node:18-alpine
 WORKDIR /app
@@ -251,15 +233,7 @@ COPY . .
 RUN npm run build
 EXPOSE 3000
 CMD ["npm", "start"]
-\`\`\`
 
-### Cloud Deployment
-
-The application can be deployed to:
-- **Vercel** (recommended for Next.js)
-- **Heroku** with PostgreSQL add-on
-- **AWS** with RDS PostgreSQL
-- **DigitalOcean** App Platform
 
 ## Features
 
