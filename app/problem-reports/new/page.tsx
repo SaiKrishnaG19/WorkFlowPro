@@ -33,6 +33,13 @@ interface FormData {
   slaHours: string
 }
 
+interface LookupValue {
+  id: number
+  list_name: string
+  value: string
+  sort_order: number
+}
+
 export default function NewProblemReportPage() {
   const [user, setUser] = useState<User | null>(null)
   const [formData, setFormData] = useState<FormData>({
@@ -50,65 +57,41 @@ export default function NewProblemReportPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const router = useRouter()
-
-  // Default lookup data with dynamic loading
-  const [lookupData, setLookupData] = useState({
-    clients: ["TechCorp Solutions", "DataFlow Inc", "CloudTech Ltd", "InnovateSoft", "SystemsPro"],
-    environments: ["Production", "Staging", "Development", "Testing", "UAT"],
-    supportTypes: ["Technical Support", "Application Support", "Infrastructure Support", "Database Support"],
-    slaOptions: [
-      { value: "1", label: "1 Hour (Critical)" },
-      { value: "2", label: "2 Hours (High)" },
-      { value: "4", label: "4 Hours (Medium)" },
-      { value: "8", label: "8 Hours (Low)" },
-      { value: "24", label: "24 Hours (Planned)" },
-    ],
-  })
+  const [clientOptions, setClientOptions] = useState<LookupValue[]>([])
+  const [environmentsOptions, setEnvironmentsOptions] = useState<LookupValue[]>([])
+  const [supportTypeOptions, setSupportTypeOptions] = useState<LookupValue[]>([])
+  const [slaOptions, setSlaOptions] = useState<LookupValue[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (!userData) {
-      router.push("/")
-      return
-    }
-    const parsedUser = JSON.parse(userData)
-    setUser(parsedUser)
-
-    // Set default attended by to current user
-    setFormData((prev) => ({ ...prev, attendedBy: parsedUser.name }))
-
-    // Load lookup lists from localStorage and merge with defaults
-    const savedLookupLists = localStorage.getItem("lookupLists")
-    if (savedLookupLists) {
+    const checkSession = async () => {
       try {
-        const parsedLists = JSON.parse(savedLookupLists)
-
-        // Find and merge lookup lists
-        const clientsList = parsedLists.find((list: any) => list.name === "clients")
-        const environmentsList = parsedLists.find((list: any) => list.name === "environments")
-        const supportTypesList = parsedLists.find((list: any) => list.name === "supportTypes")
-
-        // Create updated lookup data
-        const updatedLookupData = { ...lookupData }
-
-        if (clientsList) {
-          const additionalClients = clientsList.values.map((v: any) => v.value)
-          updatedLookupData.clients = [...new Set([...lookupData.clients, ...additionalClients])]
+        const response = await fetch('/api/auth/session', { credentials: 'include' })
+        if (!response.ok) {
+          router.push('/')
+          return
         }
-        if (environmentsList) {
-          const additionalEnvironments = environmentsList.values.map((v: any) => v.value)
-          updatedLookupData.environments = [...new Set([...lookupData.environments, ...additionalEnvironments])]
-        }
-        if (supportTypesList) {
-          const additionalSupportTypes = supportTypesList.values.map((v: any) => v.value)
-          updatedLookupData.supportTypes = [...new Set([...lookupData.supportTypes, ...additionalSupportTypes])]
-        }
-
-        setLookupData(updatedLookupData)
+        const userData = await response.json()
+        setUser(userData)
+        setFormData((prev) => ({ ...prev, attendedBy: userData.name }))
       } catch (error) {
-        console.error("Error loading lookup lists:", error)
+        console.error('Failed to fetch session:', error)
+        router.push('/')
       }
-    }
+
+              // Fetch lookup values
+        await Promise.all([
+          fetchLookupValues('client_names'),
+          fetchLookupValues('support_types'),
+          fetchLookupValues('environments'),
+          fetchLookupValues('sla')
+        ])
+        
+        setLoading(false)
+
+        }
+
+    checkSession()
   }, [router])
 
   const validateForm = (): boolean => {
@@ -134,6 +117,37 @@ export default function NewProblemReportPage() {
     return Object.keys(newErrors).length === 0
   }
 
+    const fetchLookupValues = async (listName: string) => {
+    try {
+      const response = await fetch(`/api/lookup-values/${listName}`, {
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${listName}`)
+      }
+
+      const data = await response.json()
+      
+      switch(listName) {
+        case 'client_names':
+          setClientOptions(data.values)
+          break
+        case 'support_types':
+          setSupportTypeOptions(data.values)
+          break
+        case 'environments':
+          setEnvironmentsOptions(data.values)
+          break
+        case 'sla':
+          setSlaOptions(data.values)
+          break
+      }
+    } catch (error) {
+      console.error(`Error fetching ${listName}:`, error)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -142,25 +156,32 @@ export default function NewProblemReportPage() {
     setIsSubmitting(true)
 
     // Create new report object
-    const newReport = {
-      id: `PRB-${new Date().getFullYear()}-${String(Date.now()).slice(-3).padStart(3, "0")}`,
-      clientName: formData.clientName,
+const newReport = {
+      client_name: formData.clientName,
       environment: formData.environment,
-      problemStatement: formData.problemStatement,
-      receivedAt: formData.receivedAt,
+      problem_statement: formData.problemStatement,
+      received_at: formData.receivedAt,
       rca: formData.rca,
       solution: formData.solution,
-      attendedBy: formData.attendedBy,
+      attended_by: formData.attendedBy,
       status: formData.status,
-      slaHours: Number.parseInt(formData.slaHours),
-      submittedBy: user?.name || "Unknown",
-      submittedAt: new Date().toISOString(),
+      sla_hours: Number.parseInt(formData.slaHours),
+      submitted_by: user?.name || "Unknown",
+      submitted_at: new Date().toISOString(),
     }
 
-    // Save to localStorage
-    const existingReports = JSON.parse(localStorage.getItem("problemReports") || "[]")
-    existingReports.push(newReport)
-    localStorage.setItem("problemReports", JSON.stringify(existingReports))
+    try {
+      const response = await fetch('/api/problem-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(newReport),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create problem report')
+      }
+
 
     setIsSubmitting(false)
     setSubmitSuccess(true)
@@ -169,6 +190,10 @@ export default function NewProblemReportPage() {
     setTimeout(() => {
       router.push("/problem-reports")
     }, 2000)
+  } catch (error) {
+      console.error('Error creating problem report:', error)
+      setIsSubmitting(false)
+    }
   }
 
   const handleInputChange = (field: keyof FormData, value: string) => {
@@ -242,9 +267,9 @@ export default function NewProblemReportPage() {
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                     <SelectContent>
-                      {lookupData.clients.map((client) => (
-                        <SelectItem key={client} value={client}>
-                          {client}
+                      {clientOptions.map((client) => (
+                        <SelectItem key={client.id} value={client.id.toString()}>
+                          {client.value}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -262,9 +287,9 @@ export default function NewProblemReportPage() {
                       <SelectValue placeholder="Select environment" />
                     </SelectTrigger>
                     <SelectContent>
-                      {lookupData.environments.map((env) => (
-                        <SelectItem key={env} value={env}>
-                          {env}
+                      {environmentsOptions.map((env) => (
+                        <SelectItem key={env.id} value={env.id.toString()}>
+                          {env.value}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -306,9 +331,9 @@ export default function NewProblemReportPage() {
                       <SelectValue placeholder="Select SLA" />
                     </SelectTrigger>
                     <SelectContent>
-                      {lookupData.slaOptions.map((sla) => (
+                      {slaOptions.map((sla) => (
                         <SelectItem key={sla.value} value={sla.value}>
-                          {sla.label}
+                          {sla.value}
                         </SelectItem>
                       ))}
                     </SelectContent>

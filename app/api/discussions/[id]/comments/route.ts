@@ -32,29 +32,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const db = DatabaseService.getInstance()
 
     // Create the comment
-    const comment = await db.createDiscussion({
-      title: "", // Comments don't have titles
-      content: data.content,
-      user_id: session.empId,
-      parent_post_id: parseInt(id),
-      is_active: true
-    })
-
-    // If there are mentions, create a new discussion for each mentioned user
-    if (data.mentions && data.mentions.length > 0) {
-      const originalDiscussion = await db.getDiscussionById(id)
-      if (originalDiscussion) {
-        for (const mentionedUser of data.mentions) {
-          // Create a new discussion with the mention
-          await db.createDiscussion({
-            title: `Re: ${originalDiscussion.title}`,
-            content: `${session.name} mentioned you in a comment:\n\n${data.content}`,
-            user_id: session.empId,
-            is_active: true
-          })
-        }
-      }
-    }
+  const comment = await db.createComment({
+  discussion_id: parseInt(id),
+  content: data.content,
+  user_id: session.empId,
+  mentions: data.mentions || [],
+  is_active: true
+})
 
     return NextResponse.json(comment)
   } catch (error) {

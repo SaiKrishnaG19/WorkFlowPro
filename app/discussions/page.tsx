@@ -29,6 +29,7 @@ interface Discussion {
   reportId?: string
   hasAttachment: boolean
   isActive: boolean
+  userId?: string
 }
 
 interface Comment {
@@ -59,8 +60,8 @@ export default function DiscussionsPage() {
         throw new Error('Failed to fetch discussions')
       }
 
-      const discussionsData = await response.json()
-      const formattedDiscussions = discussionsData.map((discussion: any) => ({
+      const data = await response.json()
+      const formattedDiscussions = data.map((discussion: any) => ({
         id: discussion.id,
         title: discussion.title,
         content: discussion.content,
@@ -72,7 +73,8 @@ export default function DiscussionsPage() {
         reportType: discussion.report_type,
         reportId: discussion.report_id,
         hasAttachment: !!discussion.attachment_url,
-        isActive: discussion.is_active
+        isActive: discussion.is_active,
+        userId: discussion.user_id
       }))
 
       setDiscussions(formattedDiscussions)
@@ -286,7 +288,7 @@ export default function DiscussionsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4 text-sm text-gray-500">
                         <div className="flex items-center space-x-1">
-                          <span>{discussion.author}</span>
+                          <span>{discussion.author} / {user?.name}</span>
                           <Badge className={`text-xs ${getRoleBadgeColor(discussion.authorRole)}`}>
                             {discussion.authorRole}
                           </Badge>
@@ -304,6 +306,37 @@ export default function DiscussionsPage() {
                       <Button variant="outline" size="sm" onClick={() => router.push(`/discussions/${discussion.id}`)}>
                         View Discussion
                       </Button>
+                      {(user.role === "Admin" || (discussion.author === user.name && user.empId === discussion.userId)) && (
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => router.push(`/discussions/${discussion.id}/edit`)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                              if (confirm("Are you sure you want to delete this discussion?")) {
+                                const res = await fetch(`/api/discussions/${discussion.id}`, {
+                                  method: "DELETE",
+                                  credentials: "include"
+                                })
+                                if (res.ok) {
+                                  // Remove from UI
+                                  setDiscussions(discussions.filter(d => d.id !== discussion.id))
+                                } else {
+                                  alert("Failed to delete discussion.")
+                                }
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

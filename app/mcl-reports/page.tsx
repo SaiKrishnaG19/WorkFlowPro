@@ -110,6 +110,7 @@ export default function MCLReportsPage() {
   const formatDateTime = (dateTime: string) => {
     return new Date(dateTime).toLocaleString()
   }
+  
 
   if (!user) return null
 

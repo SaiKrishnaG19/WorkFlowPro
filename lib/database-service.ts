@@ -162,4 +162,36 @@ export class DatabaseService {
       'Health check'
     )
   }
+
+  /**
+   * Create a new comment in a discussion
+   */
+  async createComment(discussionId: string, empId: string, content: string): Promise<Discussion> {
+    return withRetry(
+      async () => {
+        const client = await this.pool.connect()
+        try {
+          return await withTransaction(client, async (trxClient) => {
+            const result = await trxClient.query(
+              `INSERT INTO discussions (discussion_id, emp_id, content)
+               VALUES ($1, $2, $3)
+               RETURNING *`,
+              [discussionId, empId, content]
+            )
+            
+            if (result.rows.length === 0) {
+              throw new DatabaseError('Failed to create comment')
+            }
+            
+            return result.rows[0]
+          })
+        } finally {
+          safeRelease(client)
+        }
+      },
+      3,
+      1000,
+      'Create comment'
+    )
+  }
 }

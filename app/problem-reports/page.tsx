@@ -35,6 +35,8 @@ interface ProblemReport {
 export default function ProblemReportsPage() {
   const [user, setUser] = useState<User | null>(null)
   const [reports, setReports] = useState<ProblemReport[]>([])
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+  const [newStatus, setNewStatus] = useState<"Open" | "In Progress" | "Closed" | "">("")
   const [filteredReports, setFilteredReports] = useState<ProblemReport[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -46,7 +48,7 @@ export default function ProblemReportsPage() {
         const response = await fetch('/api/auth/session', {
           credentials: 'include'
         })
-        
+
         if (!response.ok) {
           router.push('/')
           return
@@ -125,6 +127,27 @@ export default function ProblemReportsPage() {
 
   const formatDateTime = (dateTime: string) => {
     return new Date(dateTime).toLocaleString()
+  }
+
+  const handleStatusChange = async (reportId: string, status: "Open" | "In Progress" | "Closed") => {
+    try {
+      const res = await fetch(`/api/problem-reports/${reportId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error("Failed to update status")
+
+      // Refresh reports after update
+      const updatedReportsResponse = await fetch('/api/problem-reports', { credentials: 'include' })
+      const { reports: updatedReports } = await updatedReportsResponse.json()
+      setReports(updatedReports)
+      setFilteredReports(updatedReports)
+      setUpdatingStatusId(null)
+    } catch (error) {
+      console.error(error)
+      alert("Error updating status")
+    }
   }
 
   const getSLAStatus = (receivedAt: string, slaHours: number, status: string) => {
@@ -309,7 +332,7 @@ export default function ProblemReportsPage() {
                   {filteredReports.map((report) => (
                     <TableRow key={report.id}>
                       <TableCell className="font-medium">{report.id}</TableCell>
-                      <TableCell>{report.client_names}</TableCell>
+                      <TableCell>{report.client_name || "No Client Name"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{report.environment}</Badge>
                       </TableCell>
@@ -324,16 +347,34 @@ export default function ProblemReportsPage() {
                       <TableCell>{report.attended_by}</TableCell>
                       <TableCell>{formatDateTime(report.received_at)}</TableCell>
                       <TableCell>
-                        <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                        <div className="flex space-x-2 items-center">
+                          <Link href={`/problem-reports/edit/${report.id}`}>
+                            <Button variant="outline" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
                           {report.status !== "Closed" && user?.role === "User" && report.submitted_by === user?.name && (
                             <Link href={`/problem-reports/edit/${report.id}`}>
                               <Button variant="outline" size="sm">
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </Link>
+                          )}
+                          {/* Status update dropdown */}
+                          {user?.role !== "User" && (
+                            <Select
+                              value={report.status}
+                              onValueChange={(value) => handleStatusChange(report.id, value as "Open" | "In Progress" | "Closed")}
+                            >
+                              <SelectTrigger className="w-28">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Open">Open</SelectItem>
+                                <SelectItem value="In Progress">In Progress</SelectItem>
+                                <SelectItem value="Closed">Closed</SelectItem>
+                              </SelectContent>
+                            </Select>
                           )}
                         </div>
                       </TableCell>

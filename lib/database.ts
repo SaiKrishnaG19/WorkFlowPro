@@ -9,7 +9,7 @@ const DATABASE_URL =
 export const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 30, // Maximum number of clients in the pool
+  max: 50, // Maximum number of clients in the pool
   min: 2, // Minimum number of clients in the pool
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
   connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
@@ -134,24 +134,7 @@ export async function withRetry<T>(
   throw lastError!
 }
 
-// Database transaction wrapper
-// export async function withTransaction<T>(operation: (client: PoolClient) => Promise<T>, client: PoolClient): Promise<T> {
-//   if (!client) {
-//     throw new Error('Client is required for transaction')
-//   }
-//   try {
-//     await client.query("BEGIN")
-//     const result = await operation(client)
-//     await client.query("COMMIT")
-//     return result
-//   } catch (error) {
-//     await client.query("ROLLBACK")
-//     throw error
-//   } finally {
-//     client.release()
-//   }
-// }
-
+//Database transaction wrapper
 export async function withTransaction<T>(
 operation: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect()
@@ -217,38 +200,38 @@ export class DatabaseService {
     return DatabaseService.instance
   }
 
-  // // Initialize database schema and seed data
-  // async initialize(): Promise<void> {
-  //   if (this.initialized) return
+  // Initialize database schema and seed data
+  async initialize(): Promise<void> {
+    if (this.initialized) return
 
-  //   try {
-  //     console.log("🚀 Initializing database...")
+    try {
+      console.log("🚀 Initializing database...")
 
-  //     // Check if database is already initialized
-  //     const client = await pool.connect()
-  //     try {
-  //       const result = await client.query(
-  //         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users')"
-  //       )
-  //       const tableExists = result.rows[0].exists
+      // Check if database is already initialized
+      const client = await pool.connect()
+      try {
+        const result = await client.query(
+          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'notifications')"
+        )
+        const tableExists = result.rows[0].exists
 
-  //       if (!tableExists) {
-  //         await this.createSchema()
-  //         await this.seedDefaultData()
-  //         console.log("✅ Database initialization completed successfully")
-  //       } else {
-  //         console.log("✅ Database already initialized, skipping...")
-  //       }
+        if (!tableExists) {
+          await this.createSchema()
+          await this.seedDefaultData()
+          console.log("✅ Database initialization completed successfully")
+        } else {
+          console.log("✅ Database already initialized, skipping...")
+        }
 
-  //       this.initialized = true
-  //     } finally {
-  //       client.release()
-  //     }
-  //   } catch (error) {
-  //     console.error("❌ Database initialization failed:", error)
-  //     throw error
-  //   }
-  // }
+        this.initialized = true
+      } finally {
+        client.release()
+      }
+    } catch (error) {
+      console.error("❌ Database initialization failed:", error)
+      throw error
+    }
+  }
 
   // Comprehensive health check
   async healthCheck(useCache = true): Promise<DatabaseHealth> {
@@ -276,10 +259,10 @@ export class DatabaseService {
           SELECT table_name 
           FROM information_schema.tables 
           WHERE table_schema = 'public' 
-          AND table_name IN ('users', 'mcl_reports', 'problem_reports', 'discussion_posts', 'lookup_list_values')
+          AND table_name IN ('users', 'mcl_reports', 'problem_reports', 'discussion_posts', 'lookup_list_values', 'notifications')
         `)
 
-        const expectedTables = ["users", "mcl_reports", "problem_reports", "discussion_posts", "lookup_list_values"]
+        const expectedTables = ["users", "mcl_reports", "problem_reports", "discussion_posts", "lookup_list_values", "notifications"]
         const existingTables = tablesResult.rows.map((row) => row.table_name)
         const missingTables = expectedTables.filter((table) => !existingTables.includes(table))
 
@@ -356,266 +339,277 @@ export class DatabaseService {
     return `${hours}h ${minutes}m`
   }
 
-  // // Create database schema
-  // private async createSchema(): Promise<void> {
-  //   await withRetry(
-  //     async () => {
-  //       await withTransaction(async (client) => {
-  //         // Create users table
-  //         await client.query(`
-  //         CREATE TABLE IF NOT EXISTS users (
-  //           emp_id VARCHAR(20) PRIMARY KEY,
-  //           name VARCHAR(100) NOT NULL,
-  //           email VARCHAR(100) UNIQUE NOT NULL,
-  //           password_hash VARCHAR(255) NOT NULL,
-  //           role VARCHAR(20) NOT NULL CHECK (role IN ('User', 'Manager', 'Admin')),
-  //           is_active BOOLEAN DEFAULT true,
-  //           password_change_required BOOLEAN DEFAULT false,
-  //           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  //           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  //           last_login TIMESTAMP
-  //         )
-  //       `)
+  // Create database schema
+  private async createSchema(): Promise<void> {
+    await withRetry(
+      async () => {
+        await withTransaction(async (client) => {
+          // Create users table
+          await client.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            emp_id VARCHAR(20) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(20) NOT NULL CHECK (role IN ('User', 'Manager', 'Admin')),
+            is_active BOOLEAN DEFAULT true,
+            password_change_required BOOLEAN DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+          )
+        `)
 
-  //         // Create lookup_list_values table
-  //         await client.query(`
-  //         CREATE TABLE IF NOT EXISTS lookup_list_values (
-  //           id SERIAL PRIMARY KEY,
-  //           list_name VARCHAR(50) NOT NULL,
-  //           value VARCHAR(100) NOT NULL,
-  //           sort_order INTEGER NOT NULL,
-  //           manager_id VARCHAR(20) REFERENCES users(emp_id),
-  //           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  //           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  //         )
-  //       `)
+          // Create lookup_list_values table
+          await client.query(`
+          CREATE TABLE IF NOT EXISTS lookup_list_values (
+            id SERIAL PRIMARY KEY,
+            list_name VARCHAR(50) NOT NULL,
+            value VARCHAR(100) NOT NULL,
+            sort_order INTEGER NOT NULL,
+            manager_id VARCHAR(20) REFERENCES users(emp_id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
 
-  //         // Create mcl_reports table
-  //         await client.query(`
-  //         CREATE TABLE IF NOT EXISTS mcl_reports (
-  //           id VARCHAR(20) PRIMARY KEY,
-  //           client_name_id INTEGER REFERENCES lookup_list_values(id),
-  //           user_id VARCHAR(20) REFERENCES users(emp_id),
-  //           entry_at TIMESTAMP NOT NULL,
-  //           exit_at TIMESTAMP NOT NULL,
-  //           visit_type_id INTEGER REFERENCES lookup_list_values(id),
-  //           purpose_id INTEGER REFERENCES lookup_list_values(id),
-  //           shift_id INTEGER REFERENCES lookup_list_values(id),
-  //           remark TEXT NOT NULL,
-  //           status VARCHAR(20) DEFAULT 'Pending Approval' CHECK (status IN ('Pending Approval', 'Approved', 'Rejected')),
-  //           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  //           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  //           approved_by VARCHAR(20) REFERENCES users(emp_id),
-  //           approved_at TIMESTAMP,
-  //           rejected_by VARCHAR(20) REFERENCES users(emp_id),
-  //           rejected_at TIMESTAMP
-  //         )
-  //       `)
+          // Create mcl_reports table
+          await client.query(`
+          CREATE TABLE IF NOT EXISTS mcl_reports (
+            id VARCHAR(20) PRIMARY KEY,
+            client_name_id INTEGER REFERENCES lookup_list_values(id),
+            user_id VARCHAR(20) REFERENCES users(emp_id),
+            entry_at TIMESTAMP NOT NULL,
+            exit_at TIMESTAMP NOT NULL,
+            visit_type_id INTEGER REFERENCES lookup_list_values(id),
+            purpose_id INTEGER REFERENCES lookup_list_values(id),
+            shift_id INTEGER REFERENCES lookup_list_values(id),
+            remark TEXT NOT NULL,
+            status VARCHAR(20) DEFAULT 'Pending Approval' CHECK (status IN ('Pending Approval', 'Approved', 'Rejected')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            approved_by VARCHAR(20) REFERENCES users(emp_id),
+            approved_at TIMESTAMP,
+            rejected_by VARCHAR(20) REFERENCES users(emp_id),
+            rejected_at TIMESTAMP
+          )
+        `)
 
-  //         // Create problem_reports table
-  //         await client.query(`
-  //         CREATE TABLE IF NOT EXISTS problem_reports (
-  //           id VARCHAR(20) PRIMARY KEY,
-  //           client_name_id INTEGER REFERENCES lookup_list_values(id),
-  //           environment_id INTEGER REFERENCES lookup_list_values(id),
-  //           problem_statement TEXT NOT NULL,
-  //           received_at TIMESTAMP NOT NULL,
-  //           rca TEXT,
-  //           solution TEXT,
-  //           attended_by_id VARCHAR(20) REFERENCES users(emp_id),
-  //           status VARCHAR(20) DEFAULT 'Open' CHECK (status IN ('Open', 'In Progress', 'Closed')),
-  //           sla_hours INTEGER NOT NULL,
-  //           user_id VARCHAR(20) REFERENCES users(emp_id),
-  //           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  //           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  //         )
-  //       `)
+          // Create problem_reports table
+          await client.query(`
+          CREATE TABLE IF NOT EXISTS problem_reports (
+            id VARCHAR(20) PRIMARY KEY,
+            client_name_id INTEGER REFERENCES lookup_list_values(id),
+            environment_id INTEGER REFERENCES lookup_list_values(id),
+            problem_statement TEXT NOT NULL,
+            received_at TIMESTAMP NOT NULL,
+            rca TEXT,
+            solution TEXT,
+            attended_by_id VARCHAR(20) REFERENCES users(emp_id),
+            status VARCHAR(20) DEFAULT 'Open' CHECK (status IN ('Open', 'In Progress', 'Closed')),
+            sla_hours INTEGER NOT NULL,
+            user_id VARCHAR(20) REFERENCES users(emp_id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
 
-  //         // Create discussion_posts table
-  //         await client.query(`
-  //         CREATE TABLE IF NOT EXISTS discussion_posts (
-  //           id SERIAL PRIMARY KEY,
-  //           title VARCHAR(200) NOT NULL,
-  //           content TEXT NOT NULL,
-  //           report_type VARCHAR(20) CHECK (report_type IN ('MCL', 'Problem')),
-  //           report_id VARCHAR(20),
-  //           user_id VARCHAR(20) REFERENCES users(emp_id),
-  //           parent_post_id INTEGER REFERENCES discussion_posts(id),
-  //           attachment_url VARCHAR(500),
-  //           is_active BOOLEAN DEFAULT true,
-  //           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  //           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  //         )
-  //       `)
+          // Create discussion_posts table
+          await client.query(`
+          CREATE TABLE IF NOT EXISTS discussion_posts (
+            id SERIAL PRIMARY KEY,
+            title VARCHAR(200) NOT NULL,
+            content TEXT NOT NULL,
+            report_type VARCHAR(20) CHECK (report_type IN ('MCL', 'Problem')),
+            report_id VARCHAR(20),
+            user_id VARCHAR(20) REFERENCES users(emp_id),
+            parent_post_id INTEGER REFERENCES discussion_posts(id),
+            attachment_url VARCHAR(500),
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
 
-  //         // Create export_logs table
-  //         await client.query(`
-  //         CREATE TABLE IF NOT EXISTS export_logs (
-  //           id SERIAL PRIMARY KEY,
-  //           manager_id VARCHAR(20) REFERENCES users(emp_id),
-  //           report_type VARCHAR(20) NOT NULL,
-  //           filters_json JSONB,
-  //           exported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  //         )
-  //       `)
+          // Create export_logs table
+          await client.query(`
+          CREATE TABLE IF NOT EXISTS export_logs (
+            id SERIAL PRIMARY KEY,
+            manager_id VARCHAR(20) REFERENCES users(emp_id),
+            report_type VARCHAR(20) NOT NULL,
+            filters_json JSONB,
+            exported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `)
 
-  //         // Create indexes for performance
-  //         await client.query(`
-  //         CREATE INDEX IF NOT EXISTS idx_mcl_reports_user_id ON mcl_reports(user_id);
-  //         CREATE INDEX IF NOT EXISTS idx_mcl_reports_status ON mcl_reports(status);
-  //         CREATE INDEX IF NOT EXISTS idx_mcl_reports_created_at ON mcl_reports(created_at);
-  //         CREATE INDEX IF NOT EXISTS idx_problem_reports_user_id ON problem_reports(user_id);
-  //         CREATE INDEX IF NOT EXISTS idx_problem_reports_status ON problem_reports(status);
-  //         CREATE INDEX IF NOT EXISTS idx_problem_reports_created_at ON problem_reports(created_at);
-  //         CREATE INDEX IF NOT EXISTS idx_discussion_posts_user_id ON discussion_posts(user_id);
-  //         CREATE INDEX IF NOT EXISTS idx_discussion_posts_active ON discussion_posts(is_active);
-  //         CREATE INDEX IF NOT EXISTS idx_lookup_list_values_list_name ON lookup_list_values(list_name);
-  //         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-  //         CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
-  //       `)
+          // Create notifications table
+          await client.query(`
+            CREATE TABLE IF NOT EXISTS notifications (
+              id SERIAL PRIMARY KEY,
+              user_id VARCHAR(20) REFERENCES users(emp_id),
+              message TEXT NOT NULL,
+              is_read BOOLEAN DEFAULT FALSE,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+          `)
 
-  //         // Create updated_at trigger function
-  //         await client.query(`
-  //         CREATE OR REPLACE FUNCTION update_updated_at_column()
-  //         RETURNS TRIGGER AS $$
-  //         BEGIN
-  //             NEW.updated_at = CURRENT_TIMESTAMP;
-  //             RETURN NEW;
-  //         END;
-  //         $$ language 'plpgsql';
-  //       `)
+          // Create indexes for performance
+          await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_mcl_reports_user_id ON mcl_reports(user_id);
+          CREATE INDEX IF NOT EXISTS idx_mcl_reports_status ON mcl_reports(status);
+          CREATE INDEX IF NOT EXISTS idx_mcl_reports_created_at ON mcl_reports(created_at);
+          CREATE INDEX IF NOT EXISTS idx_problem_reports_user_id ON problem_reports(user_id);
+          CREATE INDEX IF NOT EXISTS idx_problem_reports_status ON problem_reports(status);
+          CREATE INDEX IF NOT EXISTS idx_problem_reports_created_at ON problem_reports(created_at);
+          CREATE INDEX IF NOT EXISTS idx_discussion_posts_user_id ON discussion_posts(user_id);
+          CREATE INDEX IF NOT EXISTS idx_discussion_posts_active ON discussion_posts(is_active);
+          CREATE INDEX IF NOT EXISTS idx_lookup_list_values_list_name ON lookup_list_values(list_name);
+          CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+          CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+        `)
 
-  //         // Create triggers for updated_at
-  //         await client.query(`
-  //         DROP TRIGGER IF EXISTS update_users_updated_at ON users;
-  //         CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+          // Create updated_at trigger function
+          await client.query(`
+          CREATE OR REPLACE FUNCTION update_updated_at_column()
+          RETURNS TRIGGER AS $$
+          BEGIN
+              NEW.updated_at = CURRENT_TIMESTAMP;
+              RETURN NEW;
+          END;
+          $$ language 'plpgsql';
+        `)
+
+          // Create triggers for updated_at
+          await client.query(`
+          DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+          CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
           
-  //         DROP TRIGGER IF EXISTS update_mcl_reports_updated_at ON mcl_reports;
-  //         CREATE TRIGGER update_mcl_reports_updated_at BEFORE UPDATE ON mcl_reports FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+          DROP TRIGGER IF EXISTS update_mcl_reports_updated_at ON mcl_reports;
+          CREATE TRIGGER update_mcl_reports_updated_at BEFORE UPDATE ON mcl_reports FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
           
-  //         DROP TRIGGER IF EXISTS update_problem_reports_updated_at ON problem_reports;
-  //         CREATE TRIGGER update_problem_reports_updated_at BEFORE UPDATE ON problem_reports FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+          DROP TRIGGER IF EXISTS update_problem_reports_updated_at ON problem_reports;
+          CREATE TRIGGER update_problem_reports_updated_at BEFORE UPDATE ON problem_reports FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
           
-  //         DROP TRIGGER IF EXISTS update_discussion_posts_updated_at ON discussion_posts;
-  //         CREATE TRIGGER update_discussion_posts_updated_at BEFORE UPDATE ON discussion_posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+          DROP TRIGGER IF EXISTS update_discussion_posts_updated_at ON discussion_posts;
+          CREATE TRIGGER update_discussion_posts_updated_at BEFORE UPDATE ON discussion_posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
           
-  //         DROP TRIGGER IF EXISTS update_lookup_list_values_updated_at ON lookup_list_values;
-  //         CREATE TRIGGER update_lookup_list_values_updated_at BEFORE UPDATE ON lookup_list_values FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-  //       `)
+          DROP TRIGGER IF EXISTS update_lookup_list_values_updated_at ON lookup_list_values;
+          CREATE TRIGGER update_lookup_list_values_updated_at BEFORE UPDATE ON lookup_list_values FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        `)
 
-  //         console.log("✅ Database schema created successfully")
-  //       })
-  //     },
-  //     3,
-  //     2000,
-  //     "Schema creation",
-  //   )
-  // }
+          console.log("✅ Database schema created successfully")
+        })
+      },
+      3,
+      2000,
+      "Schema creation",
+    )
+  }
 
-  // // Seed default data
-  // private async seedDefaultData(): Promise<void> {
-  //   await withRetry(
-  //     async () => {
-  //       await withTransaction(async (client) => {
-  //         // Check if data already exists
-  //         const userCount = await client.query("SELECT COUNT(*) FROM users")
-  //         if (Number.parseInt(userCount.rows[0].count) > 0) {
-  //           console.log("✅ Database already seeded, skipping...")
-  //           return
-  //         }
+  // Seed default data
+  private async seedDefaultData(): Promise<void> {
+    await withRetry(
+      async () => {
+        await withTransaction(async (client) => {
+          // Check if data already exists
+          const userCount = await client.query("SELECT COUNT(*) FROM users")
+          if (Number.parseInt(userCount.rows[0].count) > 0) {
+            console.log("✅ Database already seeded, skipping...")
+            return
+          }
 
-  //         // Hash default passwords
-  //         const adminPassword = await bcrypt.hash("admin123", 10)
-  //         const managerPassword = await bcrypt.hash("manager123", 10)
-  //         const userPassword = await bcrypt.hash("user123", 10)
+          // Hash default passwords
+          const adminPassword = await bcrypt.hash("admin123", 10)
+          const managerPassword = await bcrypt.hash("manager123", 10)
+          const userPassword = await bcrypt.hash("user123", 10)
 
-  //         // Insert default users
-  //         await client.query(
-  //           `
-  //         INSERT INTO users (emp_id, name, email, password_hash, role) VALUES
-  //         ('EMP001', 'Carol Admin', 'carol.admin@company.com', $1, 'Admin'),
-  //         ('EMP002', 'Bob Manager', 'bob.manager@company.com', $2, 'Manager'),
-  //         ('EMP003', 'Alice User', 'alice.user@company.com', $3, 'User'),
-  //         ('EMP004', 'David Support', 'david.support@company.com', $3, 'User'),
-  //         ('EMP005', 'Emma Lead', 'emma.lead@company.com', $2, 'Manager'),
-  //         ('EMP006', 'Sarah Tech', 'sarah.tech@company.com', $3, 'User'),
-  //         ('EMP007', 'Mike Developer', 'mike.developer@company.com', $3, 'User'),
-  //         ('EMP008', 'Lisa Analyst', 'lisa.analyst@company.com', $3, 'User')
-  //       `,
-  //           [adminPassword, managerPassword, userPassword],
-  //         )
+          // Insert default users
+          await client.query(
+            `
+          INSERT INTO users (emp_id, name, email, password_hash, role) VALUES
+          ('EMP001', 'Carol Admin', 'carol.admin@company.com', $1, 'Admin'),
+          ('EMP002', 'Bob Manager', 'bob.manager@company.com', $2, 'Manager'),
+          ('EMP003', 'Alice User', 'alice.user@company.com', $3, 'User'),
+          ('EMP004', 'David Support', 'david.support@company.com', $3, 'User'),
+          ('EMP005', 'Emma Lead', 'emma.lead@company.com', $2, 'Manager'),
+          ('EMP006', 'Sarah Tech', 'sarah.tech@company.com', $3, 'User'),
+          ('EMP007', 'Mike Developer', 'mike.developer@company.com', $3, 'User'),
+          ('EMP008', 'Lisa Analyst', 'lisa.analyst@company.com', $3, 'User')
+        `,
+            [adminPassword, managerPassword, userPassword],
+          )
 
-  //         // Insert lookup values
-  //         await client.query(`
-  //         INSERT INTO lookup_list_values (list_name, value, sort_order, manager_id) VALUES
-  //         -- Clients
-  //         ('clients', 'TechCorp Solutions', 1, 'EMP002'),
-  //         ('clients', 'DataFlow Inc', 2, 'EMP002'),
-  //         ('clients', 'CloudTech Ltd', 3, 'EMP002'),
-  //         ('clients', 'InnovateSoft', 4, 'EMP002'),
-  //         ('clients', 'SystemsPro', 5, 'EMP002'),
+          // Insert lookup values
+          await client.query(`
+          INSERT INTO lookup_list_values (list_name, value, sort_order, manager_id) VALUES
+          -- Clients
+          ('clients', 'TechCorp Solutions', 1, 'EMP002'),
+          ('clients', 'DataFlow Inc', 2, 'EMP002'),
+          ('clients', 'CloudTech Ltd', 3, 'EMP002'),
+          ('clients', 'InnovateSoft', 4, 'EMP002'),
+          ('clients', 'SystemsPro', 5, 'EMP002'),
           
-  //         -- Visit Types
-  //         ('visit_types', 'On-site Support', 1, 'EMP002'),
-  //         ('visit_types', 'Remote Support', 2, 'EMP002'),
-  //         ('visit_types', 'Consultation', 3, 'EMP002'),
-  //         ('visit_types', 'Installation', 4, 'EMP002'),
-  //         ('visit_types', 'Maintenance', 5, 'EMP002'),
+          -- Visit Types
+          ('visit_types', 'On-site Support', 1, 'EMP002'),
+          ('visit_types', 'Remote Support', 2, 'EMP002'),
+          ('visit_types', 'Consultation', 3, 'EMP002'),
+          ('visit_types', 'Installation', 4, 'EMP002'),
+          ('visit_types', 'Maintenance', 5, 'EMP002'),
           
-  //         -- Purposes
-  //         ('purposes', 'System Maintenance', 1, 'EMP002'),
-  //         ('purposes', 'Troubleshooting', 2, 'EMP002'),
-  //         ('purposes', 'Installation', 3, 'EMP002'),
-  //         ('purposes', 'Training', 4, 'EMP002'),
-  //         ('purposes', 'Consultation', 5, 'EMP002'),
-  //         ('purposes', 'Emergency Support', 6, 'EMP002'),
+          -- Purposes
+          ('purposes', 'System Maintenance', 1, 'EMP002'),
+          ('purposes', 'Troubleshooting', 2, 'EMP002'),
+          ('purposes', 'Installation', 3, 'EMP002'),
+          ('purposes', 'Training', 4, 'EMP002'),
+          ('purposes', 'Consultation', 5, 'EMP002'),
+          ('purposes', 'Emergency Support', 6, 'EMP002'),
           
-  //         -- Shifts
-  //         ('shifts', 'Day Shift', 1, 'EMP002'),
-  //         ('shifts', 'Evening Shift', 2, 'EMP002'),
-  //         ('shifts', 'Night Shift', 3, 'EMP002'),
-  //         ('shifts', 'Weekend', 4, 'EMP002'),
+          -- Shifts
+          ('shifts', 'Day Shift', 1, 'EMP002'),
+          ('shifts', 'Evening Shift', 2, 'EMP002'),
+          ('shifts', 'Night Shift', 3, 'EMP002'),
+          ('shifts', 'Weekend', 4, 'EMP002'),
           
-  //         -- Environments
-  //         ('environments', 'Production', 1, 'EMP002'),
-  //         ('environments', 'Staging', 2, 'EMP002'),
-  //         ('environments', 'Development', 3, 'EMP002'),
-  //         ('environments', 'Testing', 4, 'EMP002'),
-  //         ('environments', 'UAT', 5, 'EMP002')
-  //       `)
+          -- Environments
+          ('environments', 'Production', 1, 'EMP002'),
+          ('environments', 'Staging', 2, 'EMP002'),
+          ('environments', 'Development', 3, 'EMP002'),
+          ('environments', 'Testing', 4, 'EMP002'),
+          ('environments', 'UAT', 5, 'EMP002')
+        `)
 
-  //         // Insert sample MCL reports
-  //         await client.query(`
-  //         INSERT INTO mcl_reports (id, client_name_id, user_id, entry_at, exit_at, visit_type_id, purpose_id, shift_id, remark, status) VALUES
-  //         ('MCL-2025-001', 1, 'EMP003', '2025-01-15 09:00:00', '2025-01-15 17:00:00', 6, 11, 17, 'Completed server maintenance and system updates successfully', 'Approved'),
-  //         ('MCL-2025-002', 2, 'EMP003', '2025-01-14 14:00:00', '2025-01-14 22:00:00', 7, 12, 18, 'Resolved network connectivity issues and optimized performance', 'Pending Approval'),
-  //         ('MCL-2025-003', 3, 'EMP004', '2025-01-13 10:00:00', '2025-01-13 15:00:00', 6, 13, 17, 'New software deployment completed with comprehensive testing', 'Approved')
-  //       `)
+          // Insert sample MCL reports
+          await client.query(`
+          INSERT INTO mcl_reports (id, client_name_id, user_id, entry_at, exit_at, visit_type_id, purpose_id, shift_id, remark, status) VALUES
+          ('MCL-2025-001', 1, 'EMP003', '2025-01-15 09:00:00', '2025-01-15 17:00:00', 6, 11, 17, 'Completed server maintenance and system updates successfully', 'Approved'),
+          ('MCL-2025-002', 2, 'EMP003', '2025-01-14 14:00:00', '2025-01-14 22:00:00', 7, 12, 18, 'Resolved network connectivity issues and optimized performance', 'Pending Approval'),
+          ('MCL-2025-003', 3, 'EMP004', '2025-01-13 10:00:00', '2025-01-13 15:00:00', 6, 13, 17, 'New software deployment completed with comprehensive testing', 'Approved')
+        `)
 
-  //         // Insert sample problem reports
-  //         await client.query(`
-  //         INSERT INTO problem_reports (id, client_name_id, environment_id, problem_statement, received_at, rca, solution, attended_by_id, status, sla_hours, user_id) VALUES
-  //         ('PRB-2025-001', 1, 21, 'Database connection timeout errors occurring frequently during peak hours', '2025-01-15 10:30:00', 'Connection pool exhaustion due to high concurrent users', 'Increased connection pool size and optimized query performance', 'EMP003', 'Closed', 4, 'EMP003'),
-  //         ('PRB-2025-002', 2, 22, 'Application crashes when processing large datasets', '2025-01-14 14:15:00', 'Memory leak in data processing module', 'Currently implementing memory management fixes and monitoring', 'EMP004', 'In Progress', 8, 'EMP004'),
-  //         ('PRB-2025-003', 3, 21, 'Users unable to login to the system intermittently', '2025-01-13 09:00:00', '', '', 'EMP003', 'Open', 2, 'EMP003')
-  //       `)
+          // Insert sample problem reports
+          await client.query(`
+          INSERT INTO problem_reports (id, client_name_id, environment_id, problem_statement, received_at, rca, solution, attended_by_id, status, sla_hours, user_id) VALUES
+          ('PRB-2025-001', 1, 21, 'Database connection timeout errors occurring frequently during peak hours', '2025-01-15 10:30:00', 'Connection pool exhaustion due to high concurrent users', 'Increased connection pool size and optimized query performance', 'EMP003', 'Closed', 4, 'EMP003'),
+          ('PRB-2025-002', 2, 22, 'Application crashes when processing large datasets', '2025-01-14 14:15:00', 'Memory leak in data processing module', 'Currently implementing memory management fixes and monitoring', 'EMP004', 'In Progress', 8, 'EMP004'),
+          ('PRB-2025-003', 3, 21, 'Users unable to login to the system intermittently', '2025-01-13 09:00:00', '', '', 'EMP003', 'Open', 2, 'EMP003')
+        `)
 
-  //         // Insert sample discussions
-  //         await client.query(`
-  //         INSERT INTO discussion_posts (title, content, report_type, report_id, user_id, is_active) VALUES
-  //         ('Database Performance Optimization', 'We are experiencing database performance issues during peak hours. The connection timeouts are affecting user experience. Looking for team input on optimization strategies.', 'Problem', 'PRB-2025-001', 'EMP003', true),
-  //         ('MCL Report Documentation Standards', 'I wanted to start a discussion about standardizing our MCL report documentation. What information should we always include in the remarks section to improve clarity?', 'MCL', 'MCL-2025-001', 'EMP002', true),
-  //         ('System Maintenance Best Practices', 'Following recent maintenance activities, let us discuss best practices for system maintenance to minimize downtime and improve efficiency.', null, null, 'EMP004', true)
-  //       `)
+          // Insert sample discussions
+          await client.query(`
+          INSERT INTO discussion_posts (title, content, report_type, report_id, user_id, is_active) VALUES
+          ('Database Performance Optimization', 'We are experiencing database performance issues during peak hours. The connection timeouts are affecting user experience. Looking for team input on optimization strategies.', 'Problem', 'PRB-2025-001', 'EMP003', true),
+          ('MCL Report Documentation Standards', 'I wanted to start a discussion about standardizing our MCL report documentation. What information should we always include in the remarks section to improve clarity?', 'MCL', 'MCL-2025-001', 'EMP002', true),
+          ('System Maintenance Best Practices', 'Following recent maintenance activities, let us discuss best practices for system maintenance to minimize downtime and improve efficiency.', null, null, 'EMP004', true)
+        `)
 
-  //         console.log("✅ Database seeded successfully")
-  //       })
-  //     },
-  //     3,
-  //     2000,
-  //     "Data seeding",
-  //   )
-  // }
+          console.log("✅ Database seeded successfully")
+        })
+      },
+      3,
+      2000,
+      "Data seeding",
+    )
+  }
 
   // User authentication
   async authenticateUser(empId: string, password: string): Promise<User | null> {
@@ -837,6 +831,42 @@ export class DatabaseService {
     )
   }
 
+   async getMCLReportById(id: string): Promise<MCLReport | null> {
+    return withRetry(
+      async () => {
+        const client = await pool.connect()
+        try {
+          const result = await client.query(
+            `
+            SELECT 
+              m.*,
+              c.value as client_name,
+              vt.value as visit_type,
+              p.value as purpose,
+              s.value as shift,
+              u.name as submitted_by
+            FROM mcl_reports m
+            LEFT JOIN lookup_list_values c ON m.client_name_id = c.id
+            LEFT JOIN lookup_list_values vt ON m.visit_type_id = vt.id
+            LEFT JOIN lookup_list_values p ON m.purpose_id = p.id
+            LEFT JOIN lookup_list_values s ON m.shift_id = s.id
+            LEFT JOIN users u ON m.user_id = u.emp_id
+            WHERE m.id = $1
+            `,
+            [id]
+          )
+          return result.rows[0] || null
+        } finally {
+          client.release()
+        }
+      },
+      3,
+      1000,
+      "Get MCL report by ID"
+    )
+  }
+
+
   // Problem Reports
   async getProblemReports(userId?: string): Promise<any[]> {
     return withRetry(
@@ -988,28 +1018,82 @@ export class DatabaseService {
   async getDiscussionById(id: string): Promise<any> {
     return withRetry(
       async () => {
-        const client = await pool.connect()
-        try {
-          const result = await client.query(`
-          SELECT 
-            d.*,
-            u.name as author,
-            u.role as author_role,
-            (SELECT COUNT(*) FROM discussion_posts WHERE parent_post_id = d.id) as comments_count
-          FROM discussion_posts d
-          LEFT JOIN users u ON d.user_id = u.emp_id
-          WHERE d.id = $1 AND d.is_active = true AND d.parent_post_id IS NULL
-        `, [id])
+        return withTransaction(async (client) => {
+          const result = await client.query(
+            `
+            SELECT 
+              d.*, 
+              u.name AS author, 
+              u.role AS author_role
+            FROM discussion_posts d
+            JOIN users u ON d.user_id = u.emp_id
+            WHERE d.id = $1
+            `,
+            [id]
+          )
           return result.rows[0] || null
-        } finally {
-          client.release()
-        }
+        })
       },
       3,
       1000,
-      "Get discussion by ID",
+      "Get discussion by ID"
     )
   }
+
+   async createComment(data: {
+  discussion_id: number,
+  content: string,
+  user_id: string,
+  mentions: string[],
+  is_active: boolean
+}): Promise<any> {
+  return withRetry(
+    async () => {
+      return withTransaction(async (client) => {
+        const result = await client.query(
+          `
+          INSERT INTO discussion_posts (
+            title, content, user_id, parent_post_id, is_active
+          ) VALUES (
+            $1, $2, $3, $4, $5
+          )
+          RETURNING *
+          `,
+          [
+            "", // Use empty string for comment title
+            data.content,
+            data.user_id,
+            data.discussion_id, // parent_post_id links to the main discussion
+            data.is_active
+          ]
+        )
+
+        // Notify mentioned users
+  for (const mention of data.mentions) {
+          // Query to get emp_id from user name
+          const userRes = await client.query(
+            `SELECT emp_id FROM users WHERE name = $1`,
+            [mention]
+          )
+          if (userRes.rows.length > 0) {
+            const mentionedEmpId = userRes.rows[0].emp_id
+            await client.query(
+              `INSERT INTO notifications (user_id, message) VALUES ($1, $2)`,
+              [mentionedEmpId, `${data.user_id} mentioned you in a discussion.`]
+            )
+          } else {
+            console.warn(`Mentioned user '${mention}' not found, skipping notification.`)
+          }
+        }
+
+        return result.rows[0]
+      })
+    },
+    3,
+    1000,
+    "Create comment"
+  )
+}
 
   async getDiscussionComments(discussionId: string): Promise<any[]> {
     return withRetry(
@@ -1105,6 +1189,8 @@ export class DatabaseService {
     )
   }
 
+  
+
   // Analytics and reporting
   async getSystemStats(): Promise<any> {
     return withRetry(
@@ -1177,11 +1263,11 @@ export class DatabaseService {
 export const db = DatabaseService.getInstance()
 
 // Initialize database on module load (server-side only)
-// if (typeof window === "undefined") {
-//   db.initialize().catch((error) => {
-//     console.error("Failed to initialize database:", error)
-//   })
-
+if (typeof window === "undefined") {
+  db.initialize().catch((error) => {
+    console.error("Failed to initialize database:", error)
+  })
+  console.log("🔄 Database initialized successfully")
   // Graceful shutdown
   process.on("SIGINT", async () => {
     console.log("🛑 Received SIGINT, shutting down gracefully...")
@@ -1194,4 +1280,4 @@ export const db = DatabaseService.getInstance()
     await db.cleanup()
     process.exit(0)
   })
-
+}
