@@ -63,246 +63,82 @@ export default function ManagerDashboard() {
   const [selectedMonth, setSelectedMonth] = useState("")
   const router = useRouter()
 
-  const loadReports = () => {
-    // Load reports from localStorage (submitted by users) and combine with mock data
-    const savedMCLReports = JSON.parse(localStorage.getItem("mclReports") || "[]")
+  const loadReports = async () => {
+    try {
+      const [mclRes, problemRes] = await Promise.all([
+        fetch('/api/manager/mcl-reports'),
+        fetch('/api/manager/problem-reports'),
+      ])
 
-    // Load manager actions (approvals/rejections) from localStorage
-    const managerActions = JSON.parse(localStorage.getItem("managerActions") || "[]")
-
-    // Mock data for demonstration - ensure consistency
-    const mockMCLReports: MCLReport[] = [
-      {
-        id: "MCL-2025-001",
-        clientName: "TechCorp Solutions",
-        submittedBy: "Alice User",
-        submittedAt: "2025-06-18T18:00:00",
-        status: "Approved",
-        visitType: "On-site Support",
-        purpose: "System Maintenance",
-        approvedBy: "Bob Manager",
-        approvedAt: "2025-06-18T19:00:00",
-      },
-      {
-        id: "MCL-2025-002",
-        clientName: "DataFlow Inc",
-        submittedBy: "Alice User",
-        submittedAt: "2025-06-17T22:30:00",
-        status: "Pending Approval",
-        visitType: "Remote Support",
-        purpose: "Troubleshooting",
-      },
-      {
-        id: "MCL-2025-003",
-        clientName: "CloudTech Ltd",
-        submittedBy: "Alice User",
-        submittedAt: "2025-06-16T15:30:00",
-        status: "Rejected",
-        visitType: "On-site Support",
-        purpose: "Installation",
-        rejectedBy: "Bob Manager",
-        rejectedAt: "2025-06-16T16:00:00",
-      },
-    ]
-
-    // Combine saved reports with mock data and remove duplicates
-    const allMCLReports = [...mockMCLReports, ...savedMCLReports]
-    const uniqueMCLReports = allMCLReports.filter(
-      (report, index, self) => index === self.findIndex((r) => r.id === report.id),
-    )
-
-    // Apply manager actions to update report statuses
-    const updatedReports = uniqueMCLReports.map((report) => {
-      const action = managerActions.find((action: any) => action.reportId === report.id)
-      if (action) {
-        return {
-          ...report,
-          status: action.status,
-          approvedBy: action.status === "Approved" ? action.actionBy : report.approvedBy,
-          approvedAt: action.status === "Approved" ? action.actionAt : report.approvedAt,
-          rejectedBy: action.status === "Rejected" ? action.actionBy : report.rejectedBy,
-          rejectedAt: action.status === "Rejected" ? action.actionAt : report.rejectedAt,
-        }
+      if (!mclRes.ok || !problemRes.ok) {
+        throw new Error('Failed to fetch reports')
       }
-      return report
-    })
 
-    console.log("Manager Dashboard MCL Debug:", {
-      totalReports: updatedReports.length,
-      savedReports: savedMCLReports.length,
-      mockReports: mockMCLReports.length,
-      managerActions: managerActions.length,
-    })
+      const mclData = await mclRes.json()
+      const problemData = await problemRes.json()
 
-    setMclReports(updatedReports)
-
-    const mockProblemReports: ProblemReport[] = [
-      {
-        id: "PRB-2025-001",
-        clientName: "TechCorp Solutions",
-        submittedBy: "Alice User",
-        submittedAt: "2025-06-18T10:30:00",
-        status: "Closed",
-        environment: "Production",
-        slaHours: 4,
-      },
-    ]
-
-    // Combine saved reports with mock data
-    const savedProblemReports = JSON.parse(localStorage.getItem("problemReports") || "[]")
-    const allProblemReports = [...mockProblemReports, ...savedProblemReports]
-
-    setProblemReports(allProblemReports)
+      setMclReports(mclData.reports)
+      setProblemReports(problemData.reports)
+    } catch (error) {
+      console.error('Error loading reports:', error)
+    }
   }
 
+
+
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (!userData) {
-      router.push("/")
-      return
-    }
-    const parsedUser = JSON.parse(userData)
-    if (parsedUser.role !== "Manager" && parsedUser.role !== "Admin") {
-      router.push("/dashboard")
-      return
-    }
-    setUser(parsedUser)
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        if (!response.ok) {
+          router.push('/');
+          return;
+        }
+        const userData = await response.json();
+        if (userData.role !== "Manager" && userData.role !== "Admin") {
+          setUser(userData);
+        } else {
+            router.push('/dashboard');
+        }
+      } catch (error) {
+        console.error('Failed to fetch user session:', error);
+        router.push('/');
+      }
+    };
+    
+    fetchUser();
   }, [router])
 
   useEffect(() => {
     if (user) {
       loadReports()
-
-      // Set up interval to refresh data every 10 seconds
       const interval = setInterval(loadReports, 10000)
-
-      // Listen for storage changes
-      const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === "mclReports" || e.key === "managerActions" || e.key === "problemReports") {
-          loadReports()
-        }
-      }
-
-      window.addEventListener("storage", handleStorageChange)
-
-      return () => {
-        clearInterval(interval)
-        window.removeEventListener("storage", handleStorageChange)
-      }
+      return () => clearInterval(interval)
     }
   }, [user])
 
-  const handleApprove = (reportId: string) => {
+    const handleApprove = async (reportId: string) => {
     if (!user) return
-
-    const now = new Date().toISOString()
-
-    // Update local state immediately
-    setMclReports((prev) =>
-      prev.map((report) =>
-        report.id === reportId
-          ? {
-              ...report,
-              status: "Approved" as const,
-              approvedBy: user.name,
-              approvedAt: now,
-            }
-          : report,
-      ),
-    )
-
-    // Save manager action to localStorage for persistence
-    const managerActions = JSON.parse(localStorage.getItem("managerActions") || "[]")
-    const existingActionIndex = managerActions.findIndex((action: any) => action.reportId === reportId)
-
-    const newAction = {
-      reportId,
-      status: "Approved",
-      actionBy: user.name,
-      actionAt: now,
+    try {
+      const res = await fetch(`/api/manager/mcl-reports/${reportId}/approve`, { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to approve report')
+      await loadReports()
+    } catch (error) {
+      console.error('Error approving report:', error)
     }
-
-    if (existingActionIndex >= 0) {
-      managerActions[existingActionIndex] = newAction
-    } else {
-      managerActions.push(newAction)
+  }
+  
+  const handleReject = async (reportId: string) => {
+    if (!user) return
+    try {
+      const res = await fetch(`/api/manager/mcl-reports/${reportId}/reject`, { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to reject report')
+      await loadReports()
+    } catch (error) {
+      console.error('Error rejecting report:', error)
     }
-
-    localStorage.setItem("managerActions", JSON.stringify(managerActions))
-
-    // Also update the main mclReports if the report exists there
-    const savedReports = JSON.parse(localStorage.getItem("mclReports") || "[]")
-    const updatedSavedReports = savedReports.map((report: MCLReport) =>
-      report.id === reportId
-        ? {
-            ...report,
-            status: "Approved" as const,
-            approvedBy: user.name,
-            approvedAt: now,
-          }
-        : report,
-    )
-    localStorage.setItem("mclReports", JSON.stringify(updatedSavedReports))
-
-    // Trigger a custom event to notify other components
-    window.dispatchEvent(new CustomEvent("reportStatusChanged", { detail: { reportId, status: "Approved" } }))
   }
 
-  const handleReject = (reportId: string) => {
-    if (!user) return
-
-    const now = new Date().toISOString()
-
-    // Update local state immediately
-    setMclReports((prev) =>
-      prev.map((report) =>
-        report.id === reportId
-          ? {
-              ...report,
-              status: "Rejected" as const,
-              rejectedBy: user.name,
-              rejectedAt: now,
-            }
-          : report,
-      ),
-    )
-
-    // Save manager action to localStorage for persistence
-    const managerActions = JSON.parse(localStorage.getItem("managerActions") || "[]")
-    const existingActionIndex = managerActions.findIndex((action: any) => action.reportId === reportId)
-
-    const newAction = {
-      reportId,
-      status: "Rejected",
-      actionBy: user.name,
-      actionAt: now,
-    }
-
-    if (existingActionIndex >= 0) {
-      managerActions[existingActionIndex] = newAction
-    } else {
-      managerActions.push(newAction)
-    }
-
-    localStorage.setItem("managerActions", JSON.stringify(managerActions))
-
-    // Also update the main mclReports if the report exists there
-    const savedReports = JSON.parse(localStorage.getItem("mclReports") || "[]")
-    const updatedSavedReports = savedReports.map((report: MCLReport) =>
-      report.id === reportId
-        ? {
-            ...report,
-            status: "Rejected" as const,
-            rejectedBy: user.name,
-            rejectedAt: now,
-          }
-        : report,
-    )
-    localStorage.setItem("mclReports", JSON.stringify(updatedSavedReports))
-
-    // Trigger a custom event to notify other components
-    window.dispatchEvent(new CustomEvent("reportStatusChanged", { detail: { reportId, status: "Rejected" } }))
-  }
 
   const handleExport = (type: "mcl" | "problem", format: "csv" | "excel") => {
     // Simulate export

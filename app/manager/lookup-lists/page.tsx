@@ -50,193 +50,120 @@ export default function LookupListsPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (!userData) {
-      router.push("/")
-      return
-    }
-    const parsedUser = JSON.parse(userData)
-    if (parsedUser.role !== "Manager" && parsedUser.role !== "Admin") {
-      router.push("/dashboard")
-      return
-    }
-    setUser(parsedUser)
-
-    // Load lookup lists from localStorage or use mock data
-    const savedLookupLists = localStorage.getItem("lookupLists")
-    let mockLookupLists: LookupList[]
-
-    if (savedLookupLists) {
-      mockLookupLists = JSON.parse(savedLookupLists)
-    } else {
-      // Mock lookup lists data
-      mockLookupLists = [
-        {
-          name: "clients",
-          displayName: "Client Names",
-          values: [
-            { id: 1, value: "TechCorp Solutions", sortOrder: 1 },
-            { id: 2, value: "DataFlow Inc", sortOrder: 2 },
-            { id: 3, value: "CloudTech Ltd", sortOrder: 3 },
-            { id: 4, value: "InnovateSoft", sortOrder: 4 },
-            { id: 5, value: "SystemsPro", sortOrder: 5 },
-          ],
-        },
-        {
-          name: "visitTypes",
-          displayName: "Visit Types",
-          values: [
-            { id: 1, value: "On-site Support", sortOrder: 1 },
-            { id: 2, value: "Remote Support", sortOrder: 2 },
-            { id: 3, value: "Consultation", sortOrder: 3 },
-            { id: 4, value: "Installation", sortOrder: 4 },
-            { id: 5, value: "Maintenance", sortOrder: 5 },
-          ],
-        },
-        {
-          name: "purposes",
-          displayName: "Purposes",
-          values: [
-            { id: 1, value: "System Maintenance", sortOrder: 1 },
-            { id: 2, value: "Troubleshooting", sortOrder: 2 },
-            { id: 3, value: "Installation", sortOrder: 3 },
-            { id: 4, value: "Training", sortOrder: 4 },
-            { id: 5, value: "Consultation", sortOrder: 5 },
-            { id: 6, value: "Emergency Support", sortOrder: 6 },
-          ],
-        },
-        {
-          name: "shifts",
-          displayName: "Shifts",
-          values: [
-            { id: 1, value: "Day Shift", sortOrder: 1 },
-            { id: 2, value: "Evening Shift", sortOrder: 2 },
-            { id: 3, value: "Night Shift", sortOrder: 3 },
-            { id: 4, value: "Weekend", sortOrder: 4 },
-          ],
-        },
-        {
-          name: "environments",
-          displayName: "Environments",
-          values: [
-            { id: 1, value: "Production", sortOrder: 1 },
-            { id: 2, value: "Staging", sortOrder: 2 },
-            { id: 3, value: "Development", sortOrder: 3 },
-            { id: 4, value: "Testing", sortOrder: 4 },
-            { id: 5, value: "UAT", sortOrder: 5 },
-          ],
-        },
-        {
-          name: "supportTypes",
-          displayName: "Support Types",
-          values: [
-            { id: 1, value: "Technical Support", sortOrder: 1 },
-            { id: 2, value: "Application Support", sortOrder: 2 },
-            { id: 3, value: "Infrastructure Support", sortOrder: 3 },
-            { id: 4, value: "Database Support", sortOrder: 4 },
-          ],
-        },
-      ]
-      // Save initial mock data to localStorage
-      localStorage.setItem("lookupLists", JSON.stringify(mockLookupLists))
-    }
-
-    setLookupLists(mockLookupLists)
-    setSelectedList("clients")
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/auth/session');
+        if (!response.ok) {
+          router.push('/');
+          return;
+        }
+        const userData = await response.json();
+        if (userData.role !== "Manager" && userData.role !== "Admin") {
+          setUser(userData);
+        } else {
+            router.push('/dashboard');
+        }
+      } catch (error) {
+        console.error('Failed to fetch user session:', error);
+        router.push('/');
+      }
+    };
+    
+    fetchUser();
   }, [router])
 
-  const getCurrentList = () => {
+    // Load lookup lists from backend API
+const loadLookupLists = async () => {
+  try {
+    const res = await fetch('/api/lookup-lists')
+    if (!res.ok) throw new Error('Failed to fetch lookup lists')
+    const data = await res.json()
+    // Use data.lookupLists as returned by backend
+    setLookupLists(data.lookupLists || [])
+    if (data.lookupLists && data.lookupLists.length > 0) {
+      setSelectedList(data.lookupLists[0].name)
+    }
+  } catch (error) {
+    console.error('Error loading lookup lists:', error)
+  }
+}
+
+    
+  useEffect(() => {
+    if (user) {
+      loadLookupLists()
+    }
+  }, [user])
+
+    const getCurrentList = () => {
     return lookupLists.find((list) => list.name === selectedList)
   }
 
-  const handleAddValue = () => {
+    const handleAddValue = async () => {
     if (!newValue.trim()) return
-
     const currentList = getCurrentList()
     if (!currentList) return
 
-    const newId = Math.max(...currentList.values.map((v) => v.id)) + 1
-    const newSortOrder = Math.max(...currentList.values.map((v) => v.sortOrder)) + 1
-
-    const updatedLists = lookupLists.map((list) =>
-      list.name === selectedList
-        ? {
-            ...list,
-            values: [...list.values, { id: newId, value: newValue.trim(), sortOrder: newSortOrder }],
-          }
-        : list,
-    )
-
-    setLookupLists(updatedLists)
-    localStorage.setItem("lookupLists", JSON.stringify(updatedLists))
-
-    setNewValue("")
-    setIsAddDialogOpen(false)
+    try {
+      const res = await fetch(`/api/lookup-lists/${selectedList}/values`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: newValue.trim() }),
+      })
+      if (!res.ok) throw new Error('Failed to add value')
+      await loadLookupLists()
+      setNewValue("")
+      setIsAddDialogOpen(false)
+    } catch (error) {
+      console.error('Error adding value:', error)
+    }
   }
 
-  const handleEditValue = () => {
+  const handleEditValue = async () => {
     if (!editingValue || !editingValue.value.trim()) return
 
-    const updatedLists = lookupLists.map((list) =>
-      list.name === selectedList
-        ? {
-            ...list,
-            values: list.values.map((v) => (v.id === editingValue.id ? { ...v, value: editingValue.value.trim() } : v)),
-          }
-        : list,
-    )
-
-    setLookupLists(updatedLists)
-    localStorage.setItem("lookupLists", JSON.stringify(updatedLists))
-
-    setEditingValue(null)
-    setIsEditDialogOpen(false)
-  }
-
-  const handleDeleteValue = (id: number) => {
-    const updatedLists = lookupLists.map((list) =>
-      list.name === selectedList
-        ? {
-            ...list,
-            values: list.values.filter((v) => v.id !== id),
-          }
-        : list,
-    )
-
-    setLookupLists(updatedLists)
-    localStorage.setItem("lookupLists", JSON.stringify(updatedLists))
-  }
-
-  const handleMoveValue = (id: number, direction: "up" | "down") => {
-    const currentList = getCurrentList()
-    if (!currentList) return
-
-    const sortedValues = [...currentList.values].sort((a, b) => a.sortOrder - b.sortOrder)
-    const currentIndex = sortedValues.findIndex((v) => v.id === id)
-
-    if (
-      (direction === "up" && currentIndex === 0) ||
-      (direction === "down" && currentIndex === sortedValues.length - 1)
-    ) {
-      return
+    try {
+      const res = await fetch(`/api/lookup-lists/${selectedList}/values/${editingValue.i}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: editingValue.value.trim() }),
+      })
+      if (!res.ok) throw new Error('Failed to edit value')
+      await loadLookupLists()
+      setEditingValue(null)
+      setIsEditDialogOpen(false)
+    } catch (error) {
+      console.error('Error editing value:', error)
     }
+  }
 
-    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
-    const temp = sortedValues[currentIndex].sortOrder
-    sortedValues[currentIndex].sortOrder = sortedValues[newIndex].sortOrder
-    sortedValues[newIndex].sortOrder = temp
+  const handleDeleteValue = async (id: number) => {
+    try {
+      const res = await fetch(`/api/lookup-lists/${selectedList}/values/${id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Failed to delete value')
+      await loadLookupLists()
+    } catch (error) {
+      console.error('Error deleting value:', error)
+    }
+  }
 
-    const updatedLists = lookupLists.map((list) =>
-      list.name === selectedList ? { ...list, values: sortedValues } : list,
-    )
-
-    setLookupLists(updatedLists)
-    localStorage.setItem("lookupLists", JSON.stringify(updatedLists))
+  const handleMoveValue = async (id: number, direction: "up" | "down") => {
+    try {
+      const res = await fetch(`/api/lookup-lists/${selectedList}/values/${id}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction }),
+      })
+      if (!res.ok) throw new Error('Failed to move value')
+      await loadLookupLists()
+    } catch (error) {
+      console.error('Error moving value:', error)
+    }
   }
 
   if (!user) return null
-
-  const currentList = getCurrentList()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -346,7 +273,7 @@ export default function LookupListsPage() {
                         {list.values
                           .sort((a, b) => a.sortOrder - b.sortOrder)
                           .map((value, index) => (
-                            <TableRow key={value.id}>
+                            <TableRow key={value.i}>
                               <TableCell>{index + 1}</TableCell>
                               <TableCell className="font-medium">{value.value}</TableCell>
                               <TableCell>
@@ -357,7 +284,7 @@ export default function LookupListsPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleMoveValue(value.id, "up")}
+                                    onClick={() => handleMoveValue(value.i, "up")}
                                     disabled={index === 0}
                                   >
                                     <ArrowUp className="h-4 w-4" />
@@ -365,7 +292,7 @@ export default function LookupListsPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleMoveValue(value.id, "down")}
+                                    onClick={() => handleMoveValue(value.i, "down")}
                                     disabled={index === list.values.length - 1}
                                   >
                                     <ArrowDown className="h-4 w-4" />
@@ -383,7 +310,7 @@ export default function LookupListsPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleDeleteValue(value.id)}
+                                    onClick={() => handleDeleteValue(value.i)}
                                     className="text-red-600 hover:text-red-700"
                                   >
                                     <Trash2 className="h-4 w-4" />

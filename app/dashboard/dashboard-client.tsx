@@ -3,9 +3,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { FileText, AlertTriangle, MessageSquare, Users, Settings, Plus, TrendingUp, Clock } from "lucide-react"
+import { FileText, AlertTriangle, MessageSquare, Users, Settings, Plus, TrendingUp, Clock, Bell } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import type { SessionUser } from "@/lib/auth"
 
 interface DashboardClientProps {
@@ -17,6 +18,8 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ user, mclReports, problemReports, discussions }: DashboardClientProps) {
   const router = useRouter()
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [showNotifications, setShowNotifications] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -27,12 +30,68 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
     }
   }
 
+  const loadNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications")
+      if (res.ok) {
+        const data = await res.json()
+        setNotifications(data)
+        setShowNotifications(true)
+      } else {
+        setNotifications([])
+        setShowNotifications(true)
+      }
+    } catch (error) {
+      console.error("Error loading notifications:", error)
+      setNotifications([])
+      setShowNotifications(true)
+    }
+  }
+
   // Calculate stats
   const mclPending = mclReports.filter((r) => r.status === "Pending Approval").length
   const mclApproved = mclReports.filter((r) => r.status === "Approved").length
   const problemOpen = problemReports.filter((r) => r.status === "Open").length
   const problemInProgress = problemReports.filter((r) => r.status === "In Progress").length
   const discussionActive = discussions.filter((d) => d.is_active).length
+
+  // Helper to get month and year from a date string or Date object
+  const getMonthYear = (dateStr: string | Date) => {
+    const date = new Date(dateStr)
+    return { month: date.getMonth(), year: date.getFullYear() }
+  }
+
+    // Calculate problem reports count for current and previous month
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+
+  const prevMonthDate = new Date(currentYear, currentMonth - 1, 1)
+  const prevMonth = prevMonthDate.getMonth()
+  const prevYear = prevMonthDate.getFullYear()
+
+  const problemCountCurrentMonth = problemReports.filter((r) => {
+    const { month, year } = getMonthYear(r.created_at)
+    return month === currentMonth && year === currentYear
+  }).length
+
+  const problemCountPrevMonth = problemReports.filter((r) => {
+    const { month, year } = getMonthYear(r.created_at)
+    return month === prevMonth && year === prevYear
+  }).length
+
+  // Calculate percentage increase, handle division by zero
+  const problemMonthChange =
+    problemCountPrevMonth === 0
+      ? problemCountCurrentMonth > 0
+        ? 100
+        : 0
+      : ((problemCountCurrentMonth - problemCountPrevMonth) / problemCountPrevMonth) * 100
+
+  // Format percentage string with sign and rounded value
+  const problemMonthChangeStr =
+    (problemMonthChange >= 0 ? "+" : "") + problemMonthChange.toFixed(0) + "%"
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,6 +108,10 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
               <span className="text-sm text-gray-700">{user.name}</span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 Logout
+              </Button>
+              <Button variant="ghost" onClick={loadNotifications}>
+                <Bell />
+                {notifications.length > 0 && <Badge>{notifications.length}</Badge>}
               </Button>
             </div>
           </div>
@@ -106,7 +169,7 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
                 <TrendingUp className="h-8 w-8 text-purple-600" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">This Month</p>
-                  <p className="text-2xl font-bold text-gray-900">+12%</p>
+                  <p className="text-2xl font-bold text-gray-900">{problemMonthChangeStr}</p>
                 </div>
               </div>
             </CardContent>
@@ -363,6 +426,28 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
             </div>
           </CardContent>
         </Card>
+
+        {/* Notification dropdown/modal */}
+        {showNotifications && (
+          <div className="absolute right-4 top-16 bg-white shadow-lg rounded-lg p-4 z-50 w-80">
+            <h3 className="font-semibold mb-2">Notifications</h3>
+            {notifications.length === 0 ? (
+              <p className="text-gray-500">No notifications.</p>
+            ) : (
+              <ul className="space-y-2">
+                {notifications.map((n) => (
+                  <li key={n.id} className="text-sm text-gray-700 border-b pb-2">
+                    {n.message}
+                    <span className="block text-xs text-gray-400">{new Date(n.created_at).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => setShowNotifications(false)}>
+              Close
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

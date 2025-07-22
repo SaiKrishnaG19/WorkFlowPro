@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { db } from "@/lib/database"
+import { db, pool } from "@/lib/database"
 import { withRetry, withTransaction } from "@/lib/database"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
@@ -11,8 +11,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+  // Await params if it's a Promise
+  const awaitedParams = await params
+
+  const id = awaitedParams.id
+    
     // Get the problem report by ID
-    const report = await getProblemReportById(params.id)
+    const report = await getProblemReportById( awaitedParams.id)
 
     if (!report) {
       return NextResponse.json({ error: "Problem report not found" }, { status: 404 })
@@ -50,18 +55,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Update the report
     await updateProblemReport(params.id, reportData)
 
-    return NextResponse.json({ success: true })
+    return NextResponse.redirect(new URL("/problem-reports", request.url))
   } catch (error) {
     console.error("Error updating problem report:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
+
 // Helper function to get problem report by ID
 async function getProblemReportById(id: string) {
   return withRetry(
     async () => {
-      const client = await db.pool.connect()
+      const client = await pool.connect()
       try {
         const result = await client.query(
           `
@@ -72,7 +78,7 @@ async function getProblemReportById(id: string) {
             u.name as submitted_by,
             a.name as attended_by
           FROM problem_reports p
-          LEFT JOIN lookup_list_values c ON p.client_name_id = c.id AND c.list_name = 'clients'
+          LEFT JOIN lookup_list_values c ON p.client_name_id = c.id AND c.list_name = 'client_names'
           LEFT JOIN lookup_list_values e ON p.environment_id = e.id AND e.list_name = 'environments'
           LEFT JOIN users u ON p.user_id = u.emp_id
           LEFT JOIN users a ON p.attended_by_id = a.emp_id
@@ -91,8 +97,16 @@ async function getProblemReportById(id: string) {
   )
 }
 
+
+
+
+
+
+
+
+
 // Helper function to update problem report
-async function updateProblemReport(id: string, reportData: any) {
+async function updateProblemReport(awaitedParamsid: string, reportData: any) {
   return withRetry(
     async () => {
       return withTransaction(async (client) => {
@@ -123,7 +137,7 @@ async function updateProblemReport(id: string, reportData: any) {
             reportData.attended_by_id,
             reportData.status,
             reportData.sla_hours,
-            id
+            awaitedParamsid
           ]
         )
 
