@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: { listName
     }
 
     // Await params before accessing properties
-    const { listName } = await params
+    const { listName } =  await params
     
     const client = await pool.connect()
     try {

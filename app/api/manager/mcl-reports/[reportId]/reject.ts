@@ -3,14 +3,18 @@ import { pool } from '@/lib/database'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
-    const { reportId } = req.query
+    let { reportId } = req.query
+
+    if (Array.isArray(reportId)) {
+      reportId = reportId[0]
+    }
 
     try {
       const client = await pool.connect()
       try {
         // Query to reject the report
         const result = await client.query(
-          'UPDATE mcl_reports SET status = $1 WHERE report_id = $2 RETURNING *',
+          'UPDATE mcl_reports SET status = $1 WHERE id = $2 RETURNING *',
           ['rejected', reportId]
         )
         if (result.rowCount === 0) {

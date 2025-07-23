@@ -60,7 +60,7 @@ export default function NewMCLReportPage() {
 
         // Fetch lookup values
         await Promise.all([
-          fetchLookupValues('client_names'),
+          fetchLookupValues('clients'),
           fetchLookupValues('visit_types'),
           fetchLookupValues('purposes'),
           fetchLookupValues('shifts')
@@ -89,7 +89,7 @@ export default function NewMCLReportPage() {
       const data = await response.json()
       
       switch(listName) {
-        case 'client_names':
+        case 'clients':
           setClientOptions(data.values)
           break
         case 'visit_types':
