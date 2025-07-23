@@ -49,6 +49,8 @@ export default function LookupListsPage() {
   const [editingValue, setEditingValue] = useState<LookupValue | null>(null)
   const router = useRouter()
 
+  const slaOptions = lookupLists.find(list => list.name === "sla_hours")?.values || []
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -61,48 +63,49 @@ export default function LookupListsPage() {
         if (userData.role !== "Manager" && userData.role !== "Admin") {
           setUser(userData);
         } else {
-            router.push('/dashboard');
+          router.push('/dashboard');
         }
       } catch (error) {
         console.error('Failed to fetch user session:', error);
         router.push('/');
       }
     };
-    
+
     fetchUser();
   }, [router])
 
-    // Load lookup lists from backend API
-const loadLookupLists = async () => {
-  try {
-    const res = await fetch('/api/lookup-lists')
-    if (!res.ok) throw new Error('Failed to fetch lookup lists')
-    const data = await res.json()
-    // Use data.lookupLists as returned by backend
-    setLookupLists(data.lookupLists || [])
-    if (data.lookupLists && data.lookupLists.length > 0) {
-      setSelectedList(data.lookupLists[0].name)
+  // Load lookup lists from backend API
+  const loadLookupLists = async () => {
+    try {
+      const res = await fetch('/api/lookup-lists')
+      if (!res.ok) throw new Error('Failed to fetch lookup lists')
+      const data = await res.json()
+      // Use data.lookupLists as returned by backend
+      setLookupLists(data.lookupLists || [])
+      if (data.lookupLists && data.lookupLists.length > 0) {
+        setSelectedList(data.lookupLists[0].name)
+      }
+    } catch (error) {
+      console.error('Error loading lookup lists:', error)
     }
-  } catch (error) {
-    console.error('Error loading lookup lists:', error)
   }
-}
 
-    
+
   useEffect(() => {
     if (user) {
       loadLookupLists()
     }
   }, [user])
 
-    const getCurrentList = () => {
+  const getCurrentList = () => {
     return lookupLists.find((list) => list.name === selectedList)
   }
 
-    const handleAddValue = async () => {
+  const handleAddValue = async () => {
     if (!newValue.trim()) return
     const currentList = getCurrentList()
     if (!currentList) return
+    
 
     try {
       const res = await fetch(`/api/lookup-lists/${selectedList}/values`, {
@@ -207,6 +210,15 @@ const loadLookupLists = async () => {
                 {list.displayName}
               </TabsTrigger>
             ))}
+            {!lookupLists.some(l => l.name === "sla_hours") && (
+              <TabsTrigger
+                value="sla_hours"
+                className="text-xs"
+                onClick={() => setSelectedList("sla_hours")} // <-- ensure selectedList updates here
+              >
+                SLA Hours
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {lookupLists.map((list) => (
@@ -334,6 +346,132 @@ const loadLookupLists = async () => {
               </Card>
             </TabsContent>
           ))}
+          {/* Add SLA Hours tab content if not already present */}
+          {!lookupLists.some(l => l.name === "sla_hours") && selectedList === "sla_hours" && (
+            <TabsContent value="sla_hours">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>SLA Hours</CardTitle>
+                      <CardDescription>
+                        Manage values for SLA hours dropdown. Total: {slaOptions.length} items
+                      </CardDescription>
+                    </div>
+                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Value
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New SLA Hours Value</DialogTitle>
+                          <DialogDescription>
+                            Enter a new value to add to the SLA hours list.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="newValue">Value</Label>
+                            <Input
+                              id="newValue"
+                              value={newValue}
+                              onChange={(e) => setNewValue(e.target.value)}
+                              placeholder="Enter new SLA hours value"
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={handleAddValue} disabled={!newValue.trim()}>
+                            <Save className="h-4 w-4 mr-2" />
+                            Add Value
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">#</TableHead>
+                          <TableHead>Value</TableHead>
+                          <TableHead className="w-32">Sort Order</TableHead>
+                          <TableHead className="w-48">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {slaOptions
+                          .sort((a, b) => a.sortOrder - b.sortOrder)
+                          .map((value, index) => (
+                            <TableRow key={value.i}>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell className="font-medium">{value.value}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{value.sortOrder}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleMoveValue(value.i, "up")}
+                                    disabled={index === 0}
+                                  >
+                                    <ArrowUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleMoveValue(value.i, "down")}
+                                    disabled={index === slaOptions.length - 1}
+                                  >
+                                    <ArrowDown className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingValue(value)
+                                      setIsEditDialogOpen(true)
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteValue(value.i)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {slaOptions.length === 0 && (
+                    <div className="text-center py-8">
+                      <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No values configured for SLA hours.</p>
+                      <p className="text-sm text-gray-400">Add your first value to get started.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Edit Dialog */}

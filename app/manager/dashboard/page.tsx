@@ -55,6 +55,7 @@ interface ProblemReport {
 
 export default function ManagerDashboard() {
   const [user, setUser] = useState<User | null>(null)
+  const [users, setUsers] = useState<{ empId: string; name: string }[]>([])
   const [mclReports, setMclReports] = useState<MCLReport[]>([])
   const [problemReports, setProblemReports] = useState<ProblemReport[]>([])
   const [dateFrom, setDateFrom] = useState("")
@@ -62,27 +63,6 @@ export default function ManagerDashboard() {
   const [selectedUser, setSelectedUser] = useState("all")
   const [selectedMonth, setSelectedMonth] = useState("")
   const router = useRouter()
-
-  const loadReports = async () => {
-    try {
-      const [mclRes, problemRes] = await Promise.all([
-        fetch('/api/manager/mcl-reports'),
-        fetch('/api/manager/problem-reports'),
-      ])
-
-      if (!mclRes.ok || !problemRes.ok) {
-        throw new Error('Failed to fetch reports')
-      }
-
-      const mclData = await mclRes.json()
-      const problemData = await problemRes.json()
-
-      setMclReports(mclData.reports)
-      setProblemReports(problemData.reports)
-    } catch (error) {
-      console.error('Error loading reports:', error)
-    }
-  }
 
 
 
@@ -95,29 +75,101 @@ export default function ManagerDashboard() {
           return;
         }
         const userData = await response.json();
-        if (userData.role !== "Manager" && userData.role !== "Admin") {
+
+        const role = userData.session?.role;
+        if (role === "Manager") {
           setUser(userData);
         } else {
-            router.push('/dashboard');
+          router.push('/dashboard');
         }
       } catch (error) {
         console.error('Failed to fetch user session:', error);
         router.push('/');
       }
     };
-    
+
     fetchUser();
   }, [router])
 
   useEffect(() => {
+    // Fetch active users for filter dropdown
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch('/api/users/active', {
+          credentials: 'include',
+        })
+        if (!res.ok) throw new Error('Failed to fetch users')
+        const data = await res.json()
+        setUsers(data.users || [])
+      } catch (error) {
+        console.error('Error fetching users:', error)
+      }
+    }
+
+    fetchUsers()
+  }, [])
+
+  const loadReports = async () => {
+    try {
+      // Build query params for filters
+      const params = new URLSearchParams()
+      if (dateFrom) params.append("dateFrom", dateFrom)
+      if (dateTo) params.append("dateTo", dateTo)
+      if (selectedUser && selectedUser !== "all") params.append("user", selectedUser)
+      if (selectedMonth) params.append("month", selectedMonth)
+
+      const [mclRes, problemRes] = await Promise.all([
+        fetch(`/api/manager/mcl-reports?${params.toString()}`),
+        fetch(`/api/manager/problem-reports?${params.toString()}`),
+      ])
+
+      if (!mclRes.ok || !problemRes.ok) {
+        throw new Error('Failed to fetch reports')
+      }
+
+      const mclData = await mclRes.json()
+      const problemData = await problemRes.json()
+
+      // Defensive mapping to ensure fields exist and dates are valid strings
+      const transformedMclReports = (mclData.reports || []).map((r: any) => ({
+        id: r.id,
+        clientName: String(r.client_name_id), // Ideally map ID to actual client name if possible
+        submittedBy: r.user_id,
+        submittedAt: r.entry_at,
+        status: r.status || "Pending Approval", // Adjust if status is available
+        visitType: r.visit_type_id || "", // Adjust if available
+        purpose: r.purpose_id || "", // Adjust if available
+        approvedBy: r.approved_by,
+        approvedAt: r.approved_at,
+        rejectedBy: r.rejected_by,
+        rejectedAt: r.rejected_at,
+      }))
+
+      const transformedProblemReports = (problemData.reports || []).map((r: any) => ({
+        id: r.id,
+        clientName: r.client_name_id ? String(r.client_name_id) : "Unknown",
+        submittedBy: r.user_id || "Unknown",
+        submittedAt: r.received_at,
+        status: r.status || "Open",
+        environment: r.environment_id ? String(r.environment_id) : "Unknown",
+        slaHours: r.sla_hours || 0,
+      }))
+
+
+      setMclReports(transformedMclReports)
+      setProblemReports(transformedProblemReports)
+    } catch (error) {
+      console.error('Error loading reports:', error)
+    }
+  }
+
+  useEffect(() => {
     if (user) {
       loadReports()
-      const interval = setInterval(loadReports, 10000)
-      return () => clearInterval(interval)
     }
-  }, [user])
+  }, [user, dateFrom, dateTo, selectedUser, selectedMonth])
 
-    const handleApprove = async (reportId: string) => {
+  const handleApprove = async (reportId: string) => {
     if (!user) return
     try {
       const res = await fetch(`/api/manager/mcl-reports/${reportId}/approve`, { method: 'POST' })
@@ -127,7 +179,7 @@ export default function ManagerDashboard() {
       console.error('Error approving report:', error)
     }
   }
-  
+
   const handleReject = async (reportId: string) => {
     if (!user) return
     try {
@@ -139,15 +191,88 @@ export default function ManagerDashboard() {
     }
   }
 
+const handleExport = async (type: "mcl" | "problem", format: "csv") => {
+  if (type === "mcl") {
+    try {
+      const res = await fetch('/api/manager/mcl-reports/export', {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Failed to fetch export data')
+      const data = await res.json()
+      const reports = data.reports || []
 
-  const handleExport = (type: "mcl" | "problem", format: "csv" | "excel") => {
-    // Simulate export
-    const data = type === "mcl" ? mclReports : problemReports
-    const filename = `${type}_reports_${new Date().toISOString().split("T")[0]}.${format}`
+      if (reports.length === 0) {
+        alert("No reports to export")
+        return
+      }
 
-    // In a real app, this would generate and download the file
-    alert(`Exporting ${data.length} ${type} reports as ${format.toUpperCase()} file: ${filename}`)
+      const headers = Object.keys(reports[0]).join(",") + "\n"
+      const rows = reports
+        .map((row: any) =>
+          Object.values(row)
+            .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+            .join(",")
+        )
+        .join("\n")
+
+      const csvContent = headers + rows
+      const filename = `mcl_reports_export_${new Date().toISOString().split("T")[0]}.csv`
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.setAttribute("download", filename)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Error exporting MCL reports:", error)
+      alert("Failed to export MCL reports")
+    }
+  } else if (type === "problem") {
+    try {
+      const res = await fetch('/api/manager/problem-reports/export', {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Failed to fetch export data')
+      const data = await res.json()
+      const reports = data.reports || []
+
+      if (reports.length === 0) {
+        alert("No reports to export")
+        return
+      }
+
+      const headers = Object.keys(reports[0]).join(",") + "\n"
+      const rows = reports
+        .map((row: any) =>
+          Object.values(row)
+            .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+            .join(",")
+        )
+        .join("\n")
+
+      const csvContent = headers + rows
+      const filename = `problem_reports_export_${new Date().toISOString().split("T")[0]}.csv`
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.setAttribute("download", filename)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Error exporting problem reports:", error)
+      alert("Failed to export problem reports")
+    }
   }
+}
+
 
   const getStatusBadge = (status: string, type: "mcl" | "problem") => {
     if (type === "mcl") {
@@ -330,13 +455,11 @@ export default function ManagerDashboard() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Users</SelectItem>
-                    <SelectItem value="Alice User">Alice User</SelectItem>
-                    <SelectItem value="David Support">David Support</SelectItem>
-                    <SelectItem value="Sarah Tech">Sarah Tech</SelectItem>
-                    <SelectItem value="Mike Developer">Mike Developer</SelectItem>
-                    <SelectItem value="Lisa Analyst">Lisa Analyst</SelectItem>
-                    <SelectItem value="Bob Manager">Bob Manager</SelectItem>
-                    <SelectItem value="Emma Lead">Emma Lead</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.empId} value={user.empId}>
+                        {user.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -356,17 +479,9 @@ export default function ManagerDashboard() {
                 <Download className="h-4 w-4 mr-2" />
                 Export MCL (CSV)
               </Button>
-              <Button onClick={() => handleExport("mcl", "excel")} variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export MCL (Excel)
-              </Button>
               <Button onClick={() => handleExport("problem", "csv")} variant="outline" size="sm">
                 <Download className="h-4 w-4 mr-2" />
                 Export Problems (CSV)
-              </Button>
-              <Button onClick={() => handleExport("problem", "excel")} variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export Problems (Excel)
               </Button>
             </div>
           </CardContent>
@@ -489,9 +604,6 @@ export default function ManagerDashboard() {
                             <div className="flex space-x-2">
                               <Button variant="outline" size="sm">
                                 View
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <Download className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>

@@ -9,7 +9,7 @@ export async function POST(request: NextRequest, { params }: { params: { listNam
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { listName, id } = params
+    const { listName, id } = await params
     const { direction } = await request.json()
 
     if (direction !== "up" && direction !== "down") {

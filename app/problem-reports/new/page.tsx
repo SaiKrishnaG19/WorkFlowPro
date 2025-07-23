@@ -81,10 +81,10 @@ export default function NewProblemReportPage() {
 
               // Fetch lookup values
         await Promise.all([
-          fetchLookupValues('client_names'),
+          fetchLookupValues('clients'),
           fetchLookupValues('support_types'),
           fetchLookupValues('environments'),
-          fetchLookupValues('sla')
+          fetchLookupValues('sla_hours')
         ])
         
         setLoading(false)
@@ -130,7 +130,7 @@ export default function NewProblemReportPage() {
       const data = await response.json()
       
       switch(listName) {
-        case 'client_names':
+        case 'clients':
           setClientOptions(data.values)
           break
         case 'support_types':
@@ -139,7 +139,7 @@ export default function NewProblemReportPage() {
         case 'environments':
           setEnvironmentsOptions(data.values)
           break
-        case 'sla':
+        case 'sla_hours':
           setSlaOptions(data.values)
           break
       }
@@ -156,19 +156,19 @@ export default function NewProblemReportPage() {
     setIsSubmitting(true)
 
     // Create new report object
-const newReport = {
-      client_name: formData.clientName,
-      environment: formData.environment,
-      problem_statement: formData.problemStatement,
-      received_at: formData.receivedAt,
-      rca: formData.rca,
-      solution: formData.solution,
-      attended_by: formData.attendedBy,
-      status: formData.status,
-      sla_hours: Number.parseInt(formData.slaHours),
-      submitted_by: user?.name || "Unknown",
-      submitted_at: new Date().toISOString(),
-    }
+  const newReport = {
+    client_name_id: Number(formData.clientName),
+    environment_id: Number(formData.environment),
+    problem_statement: formData.problemStatement,
+    received_at: formData.receivedAt,
+    rca: formData.rca,
+    solution: formData.solution,
+    attended_by_id: user?.empId || "",
+    status: formData.status,
+    sla_hours: Number.parseInt(formData.slaHours),
+    user_id: user?.empId || "",
+    submitted_at: new Date().toISOString(),
+  }
 
     try {
       const response = await fetch('/api/problem-reports', {

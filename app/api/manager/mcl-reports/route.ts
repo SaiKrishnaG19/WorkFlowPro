@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { approveMclReport, rejectMclReport, getMCLReports } from '@/lib/dbextend'
+import { approveMclReport, rejectMclReport } from '@/lib/dbextend'
+import { db } from '@/lib/database'
 
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Fetch MCL reports from DB
-    const reports = await getMCLReports()
+    const url = new URL(request.url)
+    const dateFrom = url.searchParams.get('dateFrom') || undefined
+    const dateTo = url.searchParams.get('dateTo') || undefined
+    const user = url.searchParams.get('user') || undefined
+    const month = url.searchParams.get('month') || undefined
+
+    // Pass filters to your DB function
+    const reports = await db.getMCLReportsForManager({ dateFrom, dateTo, user, month })
 
     return NextResponse.json({ reports })
   } catch (error) {

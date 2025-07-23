@@ -662,6 +662,23 @@ export class DatabaseService {
     )
   }
 
+  async getActiveUsers(): Promise<User[]> {
+  return withRetry(
+    async () => {
+      const client = await pool.connect()
+      try {
+        const result = await client.query("SELECT * FROM users WHERE is_active = true ORDER BY name ASC")
+        return result.rows
+      } finally {
+        client.release()
+      }
+    },
+    3,
+    1000,
+    "Get active users",
+  )
+}
+
   async createUser(userData: Omit<User, "created_at" | "updated_at">): Promise<User> {
     return withRetry(
       async () => {
@@ -773,6 +790,63 @@ export class DatabaseService {
     )
   }
 
+async getMCLReportsForManager(filters?: { dateFrom?: string; dateTo?: string; user?: string; month?: string }): Promise<any[]> {
+  return withRetry(
+    async () => {
+      const client = await pool.connect()
+      try {
+        let query = `
+          SELECT 
+            m.*,
+            c.value as client_name,
+            vt.value as visit_type,
+            p.value as purpose,
+            s.value as shift,
+            u.name as submitted_by
+          FROM mcl_reports m
+          LEFT JOIN lookup_list_values c ON m.client_name_id = c.id
+          LEFT JOIN lookup_list_values vt ON m.visit_type_id = vt.id
+          LEFT JOIN lookup_list_values p ON m.purpose_id = p.id
+          LEFT JOIN lookup_list_values s ON m.shift_id = s.id
+          LEFT JOIN users u ON m.user_id = u.emp_id
+          WHERE 1=1
+        `
+
+        const params: any[] = []
+        let paramIndex = 1
+
+        if (filters?.dateFrom) {
+          query += ` AND m.entry_at >= $${paramIndex++}`
+          params.push(filters.dateFrom)
+        }
+        if (filters?.dateTo) {
+          query += ` AND m.entry_at <= $${paramIndex++}`
+          params.push(filters.dateTo)
+        }
+        if (filters?.user) {
+          query += ` AND m.user_id = $${paramIndex++}`
+          params.push(filters.user)
+        }
+        if (filters?.month) {
+          // Assuming month is in "YYYY-MM" format, filter by year and month of entry_at
+          query += ` AND TO_CHAR(m.entry_at, 'YYYY-MM') = $${paramIndex++}`
+          params.push(filters.month)
+        }
+
+        query += " ORDER BY m.created_at DESC"
+
+        const result = await client.query(query, params)
+        return result.rows
+      } finally {
+        client.release()
+      }
+    },
+    3,
+    1000,
+    "Get MCL reports",
+  )
+}
+
   async createMCLReport(reportData: any): Promise<any> {
     return withRetry(
       async () => {
@@ -866,7 +940,6 @@ export class DatabaseService {
     )
   }
 
-
   // Problem Reports
   async getProblemReports(userId?: string): Promise<any[]> {
     return withRetry(
@@ -907,6 +980,59 @@ export class DatabaseService {
     )
   }
 
+async getProblemReportsForManager(filters?: { dateFrom?: string; dateTo?: string; user?: string; month?: string }): Promise<any[]> {
+  return withRetry(
+    async () => {
+      const client = await pool.connect()
+      try {
+        let query = `
+          SELECT 
+            p.*,
+            c.value as client_name,
+            e.value as environment,
+            u.name as submitted_by,
+            a.name as attended_by
+          FROM problem_reports p
+          LEFT JOIN lookup_list_values c ON p.client_name_id = c.id
+          LEFT JOIN lookup_list_values e ON p.environment_id = e.id
+          LEFT JOIN users u ON p.user_id = u.emp_id
+          LEFT JOIN users a ON p.attended_by_id = a.emp_id
+          WHERE 1=1
+        `
+
+        const params: any[] = []
+        let paramIndex = 1
+
+        if (filters?.dateFrom) {
+          query += ` AND p.received_at >= $${paramIndex++}`
+          params.push(filters.dateFrom)
+        }
+        if (filters?.dateTo) {
+          query += ` AND p.received_at <= $${paramIndex++}`
+          params.push(filters.dateTo)
+        }
+        if (filters?.user) {
+          query += ` AND p.user_id = $${paramIndex++}`
+          params.push(filters.user)
+        }
+        if (filters?.month) {
+          query += ` AND TO_CHAR(p.received_at, 'YYYY-MM') = $${paramIndex++}`
+          params.push(filters.month)
+        }
+
+        query += " ORDER BY p.created_at DESC"
+
+        const result = await client.query(query, params)
+        return result.rows
+      } finally {
+        client.release()
+      }
+    },
+    3,
+    1000,
+    "Get problem reports",
+  )
+}
   async createProblemReport(reportData: any): Promise<any> {
     return withRetry(
       async () => {
