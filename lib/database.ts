@@ -611,6 +611,20 @@ export class DatabaseService {
     )
   }
 
+  async executeSqlQuery(query: string): Promise<any> {
+    if (!query.trim()) {
+      throw new Error("Query cannot be empty")
+    }
+
+    try {
+      const result = await pool.query(query)
+      return result.rows
+    } catch (error) {
+      console.error("Error executing SQL query:", error)
+      throw error
+    }
+  }
+
   // User authentication
   async authenticateUser(empId: string, password: string): Promise<User | null> {
     return withRetry(

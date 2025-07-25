@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { FileText, AlertTriangle, MessageSquare, Users, Settings, Plus, TrendingUp, Clock, Bell } from "lucide-react"
 import Link from "next/link"
+import { Database } from "lucide-react"
+import { format } from "date-fns"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { Textarea } from "@/components/ui/textarea"
 import type { SessionUser } from "@/lib/auth"
 
 interface DashboardClientProps {
@@ -20,6 +23,8 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
   const router = useRouter()
   const [notifications, setNotifications] = useState<any[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
+  const [sqlQuery, setSqlQuery] = useState("")
+  const [sqlResult, setSqlResult] = useState<any>(null)
 
   const handleLogout = async () => {
     try {
@@ -61,7 +66,7 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
     return { month: date.getMonth(), year: date.getFullYear() }
   }
 
-    // Calculate problem reports count for current and previous month
+  // Calculate problem reports count for current and previous month
   const now = new Date()
   const currentMonth = now.getMonth()
   const currentYear = now.getFullYear()
@@ -79,6 +84,10 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
     const { month, year } = getMonthYear(r.created_at)
     return month === prevMonth && year === prevYear
   }).length
+
+  const formatDate = (dateString: string) => {
+    return format(new Date(dateString), "dd/MM/yyyy")
+  }
 
   // Calculate percentage increase, handle division by zero
   const problemMonthChange =
@@ -185,7 +194,7 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
                 <FileText className="h-5 w-5 text-blue-600 mr-2" />
                 MCL
               </CardTitle>
-              <CardDescription>Manage Manpower, Cost & Logistics reports</CardDescription>
+              <CardDescription>Track and manage MCL reports</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -353,6 +362,22 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
                 </CardContent>
               </Card>
             )}
+            {user.role === "Admin" && (
+              <Card className="mt-8">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Database className="h-5 w-5 text-blue-600 mr-2" />
+                    SQL Editor
+                  </CardTitle>
+                  <CardDescription>Execute SQL queries directly on the database</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link href="/admin/sql">
+                    <Button className="w-full">Open SQL Editor</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
@@ -375,7 +400,7 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
                   <div className="flex-1">
                     <p className="text-sm font-medium">MCL Report for {report.client_name}</p>
                     <p className="text-xs text-gray-500">
-                      by {report.submitted_by} • {new Date(report.created_at).toLocaleDateString()}
+                      by {report.submitted_by}•{formatDate(report.created_at)}
                     </p>
                   </div>
                   <Badge
@@ -399,7 +424,7 @@ export default function DashboardClient({ user, mclReports, problemReports, disc
                   <div className="flex-1">
                     <p className="text-sm font-medium">Problem Report for {report.client_name}</p>
                     <p className="text-xs text-gray-500">
-                      by {report.submitted_by} • {new Date(report.created_at).toLocaleDateString()}
+                      by {report.submitted_by}•{formatDate(report.created_at)}
                     </p>
                   </div>
                   <Badge
