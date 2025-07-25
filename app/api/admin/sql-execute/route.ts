@@ -1,5 +1,3 @@
-// FILEPATH: c:/Users/Pratyusha/Downloads/wms/app/api/admin/sql-execute/route.ts
-
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/database'
 import { getSession } from '@/lib/auth'
